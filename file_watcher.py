@@ -20,15 +20,20 @@ class EventHandler(ProcessEvent):
         print "Deleted %s" % os.path.join(event.path, event.name)
 
 notifier = None
+watches = {}
 
 def watch(file_path, finished_writing_callback):
     print "Will monitor %s for changes" % file_path
+    if file_path in watches:
+        print "Already monitoring"
+        return
     handler = EventHandler()
     handler.add_finished_writing_callback(finished_writing_callback)
     global notifier
     notifier = ThreadedNotifier(wm, handler)
     notifier.start()
     wdd = wm.add_watch(file_path, mask, rec=True, auto_add=True)
+    watches[file_path] = wdd
 
 def stop_watching():
     print "stopping!"
