@@ -11,10 +11,7 @@ is_py26 = (_ver[:2] == (2, 6))
 
 if is_py26:
     from gmusicapi.utils.counter import Counter
-    try:
-        import unittest2 as unittest
-    except:
-        print "Error importing unittest2, ignoring"
+    #import unittest2 as unittest
     import json
 else:  # 2.7
     from collections import Counter

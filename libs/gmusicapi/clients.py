@@ -7,12 +7,14 @@ The clients module exposes the main user-facing interfaces of gmusicapi.
 
 import copy
 import logging
+import os
 from socket import gethostname
 import time
 from uuid import getnode as getmac
 
 from appdirs.appdirs import AppDirs
-from oauth2client.client import OAuth2WebServerFlow
+import httplib2  # included with oauth2client
+from oauth2client.client import OAuth2WebServerFlow, TokenRevokeError
 import oauth2client.file
 
 from gmusicapi.gmtools import tools
@@ -23,7 +25,10 @@ import gmusicapi.session
 
 # not to be changed at runtime
 mydirs = AppDirs('gmusicapi', 'Simon Weber')
-OAUTH_FILEPATH = mydirs.user_data_dir + 'oauth.cred'
+OAUTH_FILEPATH = os.path.join(mydirs.user_data_dir, 'oauth.cred')
+
+# oauth client breaks if the dir doesn't exist
+utils.make_sure_path_exists(os.path.dirname(OAUTH_FILEPATH), 0o700)
 
 
 class _Base(object):
@@ -81,6 +86,8 @@ class _Base(object):
     def logout(self):
         """Forgets local authentication in this Api instance.
         Returns ``True`` on success."""
+
+        self.session.logout()
         self.logger.info("logged out")
         return True
 
@@ -94,7 +101,24 @@ class Musicmanager(_Base):
     For most users, :func:`perform_oauth` should be run once per machine to
     store credentials to disk. Future calls to :func:`login` can use
     use the stored credentials by default.
+
+    Alternatively, users can implement the OAuth flow themselves, then
+    provide credentials directly to :func:`login`.
     """
+
+    def get_oauth_uri(self):
+        self.flow = OAuth2WebServerFlow(*musicmanager.oauth)
+
+        return self.flow.step1_get_authorize_url()
+
+    def set_oauth_code(self, code, storage_filepath=OAUTH_FILEPATH):
+        credentials = self.flow.step2_exchange(code)
+
+        if storage_filepath is not None:
+            storage = oauth2client.file.Storage(storage_filepath)
+            storage.put(credentials)
+
+        return credentials
 
     @staticmethod
     def perform_oauth(storage_filepath=OAUTH_FILEPATH):
@@ -134,6 +158,8 @@ class Musicmanager(_Base):
         return credentials
 
     def __init__(self, debug_logging=True):
+        self.session = gmusicapi.session.Musicmanager()
+
         super(Musicmanager, self).__init__(self.__class__.__name__, debug_logging)
         self.logout()
 
@@ -182,11 +208,16 @@ class Musicmanager(_Base):
         """
 
         if isinstance(oauth_credentials, basestring):
-            storage = oauth2client.file.Storage(oauth_credentials)
+            oauth_file = oauth_credentials
+            storage = oauth2client.file.Storage(oauth_file)
+
             oauth_credentials = storage.get()
+            if oauth_credentials is None:
+                self.logger.warning("could not retrieve oauth credentials from '%s'", oauth_file)
+                return False
 
         if not self.session.login(oauth_credentials):
-            self.logger.info("failed to authenticate")
+            self.logger.warning("failed to authenticate")
             return False
 
         self.logger.info("oauth successful")
@@ -225,12 +256,30 @@ class Musicmanager(_Base):
 
         return True
 
-    def logout(self):
-        self.session = gmusicapi.session.Musicmanager()
+    def logout(self, revoke_oauth=False):
+        """Forgets local authentication in this Client instance.
+
+        :param revoke_oauth: if True, oauth credentials will be permanently
+          revoked. If credentials came from a file, it will be deleted.
+
+        Returns ``True`` on success."""
+
+        # TODO the login/logout stuff is all over the place
+
+        success = True
+
+        if revoke_oauth:
+            try:
+                # this automatically deletes a Storage file, if present
+                self.session._oauth_creds.revoke(httplib2.Http())
+            except TokenRevokeError:
+                self.logger.exception("could not revoke oauth credentials")
+                success = False
+
         self.uploader_id = None
         self.uploader_name = None
 
-        return super(Musicmanager, self).logout()
+        return success and super(Musicmanager, self).logout()
 
     # def get_quota(self):
     #     """Returns a tuple of (allowed number of tracks, total tracks, available tracks)."""
@@ -337,9 +386,15 @@ class Musicmanager(_Base):
         for sample_request in sample_requests:
             path, track = local_info[sample_request.challenge_info.client_track_id]
 
+            bogus_sample = None
+            if not enable_matching:
+                bogus_sample = ''  # just send empty bytes
+
             try:
                 res = self._make_call(musicmanager.ProvideSample,
-                                      path, sample_request, track, self.uploader_id)
+                                      path, sample_request, track,
+                                      self.uploader_id, bogus_sample)
+
             except (IOError, ValueError) as e:
                 self.logger.warning("couldn't create scan and match sample for '%s': %s",
                                     path, str(e))
@@ -358,40 +413,14 @@ class Musicmanager(_Base):
                 if enable_matching:
                     matched[path] = sample_res.server_track_id
                 else:
-                    try:
-                        self.logger.info("requesting to reupload '%s'", path)
-
-                        @utils.retry(CallFailure)  # upload servers take time to sync
-                        def report_bad_match():
-                            """Hit 'report incorrect match' and return the sid to reupload."""
-
-                            self._make_call(webclient.ReportBadSongMatch,
-                                            [sample_res.server_track_id])
-
-                            jobs = self._make_call(musicmanager.GetUploadJobs, self.uploader_id)
-                            matching = [job for job in jobs.getjobs_response.tracks_to_upload
-                                        if (job.client_id == sample_res.client_track_id and
-                                            job.status == upload_pb2.TracksToUpload.FORCE_REUPLOAD)]
-                            if matching:
-                                return matching[0].server_id
-                            else:
-                                raise CallFailure(
-                                    "could not get reupload/rematch job for '%s'" % path,
-                                    'GetUploadJobs'
-                                )
-                        reup_sid = report_bad_match()
-
-                    except CallFailure as e:
-                        self.logger.exception("'%s' was matched without matching enabled", path)
-                        matched[path] = sample_res.server_track_id
-                    else:
-                        self.logger.info("will reupload '%s'", path)
-                        to_upload[reup_sid] = (path, track, True)
+                    self.logger.exception("'%s' was matched without matching enabled", path)
 
             elif sample_res.response_code == upload_pb2.TrackSampleResponse.UPLOAD_REQUESTED:
                 to_upload[sample_res.server_track_id] = (path, track, False)
+
             else:
-                #Report the symbolic name of the response code enum.
+                # there was a problem
+                # report the symbolic name of the response code enum for debugging
                 enum_desc = upload_pb2._TRACKSAMPLERESPONSE.enum_types[0]
                 res_name = enum_desc.values_by_number[sample_res.response_code].name
 
@@ -488,10 +517,13 @@ class Webclient(_Base):
     """Allows library management and streaming by posing as the
     music.google.com webclient.
 
-    This client does not handle uploading: use :class:`Musicmanager` instead.
+    Uploading is not supported by this client (use the :class:`Musicmanager`
+    to upload).
     """
 
     def __init__(self, debug_logging=True):
+        self.session = gmusicapi.session.Webclient()
+
         super(Webclient, self).__init__(self.__class__.__name__, debug_logging)
         self.logout()
 
@@ -516,7 +548,6 @@ class Webclient(_Base):
         return True
 
     def logout(self):
-        self.session = gmusicapi.session.Webclient()
         return super(Webclient, self).logout()
 
     def change_playlist_name(self, playlist_id, new_name):
@@ -942,13 +973,22 @@ class Webclient(_Base):
 
     def search(self, query):
         """Queries the server for songs and albums.
-        Generally, this isn't needed; just get all tracks and locally search over them.
+
+        **WARNING**: Google no longer uses this endpoint in their client;
+        it may stop working or be removed from gmusicapi without warning.
+        In addition, it is known to occasionally return unexpected results.
+        See `#114
+        <https://github.com/simon-weber/Unofficial-Google-Music-API/issues/114>`__
+        for more information.
+
+        Instead of using this call, retrieve all tracks with :func:`get_all_songs`
+        and search them locally.  `This gist
+        <https://gist.github.com/simon-weber/5007769>`__ has some examples of
+        simple linear-time searches.
 
         :param query: a string keyword to search with. Capitalization and punctuation are ignored.
 
-        Search results are organized based on how they were found.
-
-        The responses are returned in a dictionary, arranged by hit type.
+        The results are returned in a dictionary, arranged by how they were found.
         ``artist_hits`` and ``song_hits`` return a list of
         :ref:`song dictionaries <songdict-format>`, while ``album_hits`` entries
         have a different structure.

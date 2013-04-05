@@ -270,16 +270,21 @@ class UpauthTests(object):
         self.wc.change_song_metadata(orig_md)
         #TODO redownload and verify against original?
 
+    # these search tests are all skipped: see
+    # https://github.com/simon-weber/Unofficial-Google-Music-API/issues/114
+
     @staticmethod
     def _assert_search_hit(res, hit_type, hit_key, val):
         """Assert that the result (returned from wc.search) has
         ``hit[hit_type][hit_key] == val`` for only one result in hit_type."""
 
-        assert_equal(sorted(res.keys()), ['album_hits', 'artist_hits', 'song_hits'])
-        assert_not_equal(res[hit_type], [])
+        raise SkipTest('search is unpredictable (#114)')
 
-        hitmap = (hit[hit_key] == val for hit in res[hit_type])
-        assert_equal(sum(hitmap), 1)  # eg sum(True, False, True) == 2
+        #assert_equal(sorted(res.keys()), ['album_hits', 'artist_hits', 'song_hits'])
+        #assert_not_equal(res[hit_type], [])
+
+        #hitmap = (hit[hit_key] == val for hit in res[hit_type])
+        #assert_equal(sum(hitmap), 1)  # eg sum(True, False, True) == 2
 
     @song_test
     def search_title(self):
