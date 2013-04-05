@@ -216,7 +216,11 @@ class Musicmanager(_Base):
                 self.logger.warning("could not retrieve oauth credentials from '%s'", oauth_file)
                 return False
 
-        if not self.session.login(oauth_credentials):
+        try:
+            login_res = self.session.login(oauth_credentials)
+        except:
+            login_res = False
+        if not login_res:
             self.logger.warning("failed to authenticate")
             return False
 
