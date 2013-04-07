@@ -56,7 +56,7 @@ def finished_writing_callback(new_file_path):
         logger.debug("Skipping non-mp3 file")
         return
     logger.info("Uploading new file: ", new_file_path)
-    uploaded, matched, not_uploaded = mm.upload(new_file_path, enable_matching=True) # async me!
+    uploaded, matched, not_uploaded = mm.upload(new_file_path, enable_matching=False) # async me!
     if uploaded:
         logger.info("Uploaded song %s with ID %s" % (new_file_path, uploaded[new_file_path]))
     if matched:
