@@ -16,12 +16,13 @@ fh = logging.FileHandler("/tmp/gmu.log")
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
 logger.addHandler(fh)
-#logging.basicConfig(filename='gmu.log',level=logging.DEBUG)
+OAUTH_PATH="/boot/config/appdata/gmu/"
+OAUTH_FILE="oauth.cred"
 
 @route('/')
 def hello():
     logger.info("ON LANDING PAGE")
-    if not mm.login():
+    if not mm.login(os.path.join(OAUTH_PATH, OAUTH_FILE)):
         oauth_uri = mm.get_oauth_uri()
         return '''Need to perform oauth, please visit this url and paste the key you receive here: %s
                   <form method="POST" action="/submit_oauth_key">
@@ -35,11 +36,12 @@ def hello():
 def oauth_submit():
     oauth_key = request.forms.get('oauth_key')
     try:
-        mm.set_oauth_code(oauth_key)
+        os.makdirs(OAUTH_PATH)
+        mm.set_oauth_code(oauth_key, os.path.join(OAUTH_PATH, OAUTH_FILE))
     except:
         return "Error with login"
     else:
-        if not mm.login():
+        if not mm.login(os.path.join(OAUTH_PATH, OAUTH_FILE)):
             return "Error with login, incorrect code?"
         else:
             redirect("/main")
@@ -65,8 +67,15 @@ def finished_writing_callback(new_file_path):
         logger.info("Unable to upload song %s because %s" % (new_file_path, not_uploaded[new_file_path]))
 
 def main():
+    logger.info("Starting google music uploader")
     if "--pidfile" in sys.argv:
-        os.makedirs("/var/run/google_music_uploader/")
+        try:
+            os.makedirs("/var/run/google_music_uploader/")
+        except OSError as exc:
+            if exc.errno == errno.EEXIST:
+                pass
+            else:
+                logger.warning("Error making pidfile directory")
         with open("/var/run/google_music_uploader/gmu.pid", "w+") as f:
             f.write(str(os.getpid()))
 
