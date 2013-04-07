@@ -66,6 +66,7 @@ def finished_writing_callback(new_file_path):
 
 def main():
     if "--pidfile" in sys.argv:
+        os.makedirs("/var/run/google_music_uploader/")
         with open("/var/run/google_music_uploader/gmu.pid", "w+") as f:
             f.write(str(os.getpid()))
 
