@@ -13,7 +13,7 @@ import time
 import traceback
 
 from decorator.decorator import decorator
-from appdirs import AppDirs
+from appdirs.appdirs import AppDirs
 from google.protobuf.descriptor import FieldDescriptor
 
 from gmusicapi import __version__
