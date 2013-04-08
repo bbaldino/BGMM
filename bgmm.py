@@ -68,15 +68,22 @@ def finished_writing_callback(new_file_path):
 
 def main():
     logger.info("Starting google music uploader")
-    if "--pidfile" in sys.argv:
+    pidfile = None
+    if sys.argv[1] == "--pidfile":
+        if len(sys.argv) < 3:
+            logger.error("Missing pidfile path")
+            return
+        pidfile = sys.argv[2]
+
+    if pidfile:
         try:
-            os.makedirs("/var/run/google_music_uploader/")
+            os.makedirs(os.path.basename(pidfile))
         except OSError as exc:
             if exc.errno == errno.EEXIST:
                 pass
             else:
                 logger.warning("Error making pidfile directory")
-        with open("/var/run/google_music_uploader/gmu.pid", "w+") as f:
+        with open(pidfile, "w+") as f:
             f.write(str(os.getpid()))
 
 
