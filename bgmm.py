@@ -77,7 +77,7 @@ def main():
 
     if pidfile:
         try:
-            os.makedirs(os.path.basename(pidfile))
+            os.makedirs(os.path.dirname(pidfile))
         except OSError as exc:
             if exc.errno == errno.EEXIST:
                 pass
