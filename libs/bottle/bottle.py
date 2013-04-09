@@ -2498,7 +2498,19 @@ class FlupFCGIServer(ServerAdapter):
 class WSGIRefServer(ServerAdapter):
     def run(self, handler): # pragma: no cover
         from wsgiref.simple_server import make_server, WSGIRequestHandler
-        if self.quiet:
+        self.fast = True
+        if self.fast and self.quiet:  # disable logging and rDNS
+            class FastAndQuietHandler(WSGIRequestHandler):
+                def address_string(self): 
+                    return self.client_address[0]
+                def log_request(*args, **kw): 
+                    pass
+            self.options['handler_class'] = FastAndQuietHandler
+        elif self.fast:  # disable Reverse DNS Lookups -> faster service
+            class FastHandler(WSGIRequestHandler):
+                def address_string(self): return self.client_address[0]
+            self.options['handler_class'] = FastHandler
+        elif self.quiet:  # disable action entries to web-log
             class QuietHandler(WSGIRequestHandler):
                 def log_request(*args, **kw): pass
             self.options['handler_class'] = QuietHandler
