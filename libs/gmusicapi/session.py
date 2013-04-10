@@ -125,7 +125,10 @@ class Musicmanager(_Base):
 
     def login(self, oauth_credentials, *args, **kwargs):
         """Store an already-acquired oauth2client.Credentials."""
-        super(Musicmanager, self).login()
+        try:
+            super(Musicmanager, self).login()
+        except AlreadyLoggedIn:
+            return False
 
         try:
             # refresh the token right away to check auth validity

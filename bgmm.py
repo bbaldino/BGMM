@@ -9,6 +9,7 @@ from gmusicapi import Musicmanager
 import string
 from bottle.bottle import route, request, post, run, redirect
 import json
+import sqlite3
 
 mm = Musicmanager()
 logger = logging.getLogger("bgmm")
@@ -37,6 +38,12 @@ div.header {{
     font-variant:small-caps;
 }}
 
+div.login_status {{
+    font-size:medium;
+    font-family:monospace;
+    float:right;
+}}
+
 div.navbar {{
     width: 100%;
     height: 28px;
@@ -54,7 +61,7 @@ li {{
     float: left;    
 }}
 
-a:link,a:visited {{
+div.navbar a:link, div.navbar a:visited {{
     display:block;
     width:120px;
     font-weight:bold;
@@ -66,7 +73,7 @@ a:link,a:visited {{
     text-transform:uppercase;
 }}
 
-a:hover,a:active {{
+div.navbar a:hover, div.navbar a:active {{
     background-color:#006699;
 }}
 
@@ -92,6 +99,9 @@ input[type=text] {{
 </style>
 <div class="header">
     bgmm
+    <div class="login_status">
+        {0}
+    </div>
 </div>
 <div class="navbar">
     <ul>
@@ -101,23 +111,34 @@ input[type=text] {{
     </ul>
 </div>
 <div class="content">
-    {0}
+    {1}
 </div>
 <div class="footer">    
     bgmm version: .1<br/>    
 </div>
 '''
 
+def generate_main_page(content):
+    global logged_in
+    if logged_in:
+        login_status_str = "logged in<a href=\"/logout\">(logout)</a>"
+    else:
+        login_status_str = "Not logged in<a href=\"/\">(login)</a>"
+    return main_page_template.format(login_status_str, content)
+
 @route('/')
 def root():
+    global logged_in
+    logger.debug("Logging in!")
     if not mm.login(os.path.join(OAUTH_PATH, OAUTH_FILE)):
         oauth_uri = mm.get_oauth_uri()
-        return '''Need to perform oauth, please visit <a href="%s">this url</a> and paste the key you receive here:
-                  <form method="POST" action="/submit_oauth_key">
-                    <input name="oauth_key" type="text"/>
-                    <input type="submit" />
-                  </form>''' % oauth_uri
+        return generate_main_page(("Need to perform oauth, please visit <a href=\"%s\">this url</a> and paste the key you receive here: \
+                  <form method=\"POST\" action=\"/submit_oauth_key\"> \
+                    <input name=\"oauth_key\" type=\"text\"/> \
+                    <input type=\"submit\" /> \
+                  </form>" % oauth_uri))
     else:
+        logger.debug("Logged in!")
         logged_in = True
         redirect("/main")
 
@@ -135,11 +156,21 @@ def oauth_submit():
         if not mm.login(os.path.join(OAUTH_PATH, OAUTH_FILE)):
             return "Error with login, incorrect code?"
         else:
+            global logged_in
+            logged_in = True
             redirect("/main")
 
 @route('/main')
 def main():
-    return main_page_template.format("Welcome!")
+    return generate_main_page("Welcome!")
+
+@route('/logout')
+def logout():
+    mm.logout()
+    os.remove(os.path.join(OAUTH_PATH, OAUTH_FILE))
+    global logged_in
+    logged_in = False
+    redirect("/")
 
 @route('/config')
 def config():
@@ -175,14 +206,14 @@ def config():
         paths_str += "<option value=\"%s\">%s</option>" % (path, path)
     content_str = content_str % paths_str
 
-    return main_page_template.format(content_str)
+    return generate_main_page(content_str)
 
 @route('/logs')
 def logs():
     with open("/tmp/gmu.log", "r") as f:
         log_lines_desc = f.readlines()
         log_lines_desc.reverse()
-        return main_page_template.format("<br />".join(log_lines_desc))
+        return generate_main_page("<br />".join(log_lines_desc))
 
 @post('/remove_watch_path')
 def remove_watch_path():
@@ -217,11 +248,11 @@ def add_watch_path():
 
 def finished_writing_callback(new_file_path):
     filename, file_extension = os.path.splitext(new_file_path)
-    logger.debug("finished writing file, file extension:", file_extension)
+    logger.debug("finished writing file, file extension: %s" % file_extension)
     if file_extension != ".mp3":
         logger.debug("Skipping non-mp3 file")
         return
-    logger.info("Uploading new file: ", new_file_path)
+    logger.info("Uploading new file: %s" % new_file_path)
     uploaded, matched, not_uploaded = mm.upload(new_file_path, enable_matching=False) # async me!
     if uploaded:
         logger.info("Uploaded song %s with ID %s" % (new_file_path, uploaded[new_file_path]))
@@ -265,7 +296,7 @@ def main():
             logger.warning("Error creating pidfile directory %s" % os.path.dirname(pidfile))
             return
         with open(pidfile, "w+") as f:
-            logger.debug("Writing pidfile to", pidfile)
+            logger.debug("Writing pidfile to %s" % pidfile)
             f.write(str(os.getpid()))
     # Start watching any previously configured paths
     global config
