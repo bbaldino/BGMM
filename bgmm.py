@@ -25,6 +25,8 @@ CONFIG_FILE="/boot/config/plugins/bgmm/bgmm_config.cfg"
 DB_FILE="/boot/config/plugins/bgmm/bgmm.db"
 config = {}
 logged_in = False
+STATUS_SCANNED = "SCANNED"
+STATUS_UPLOADED = "UPLOADED"
 
 # ----- Web -------
 main_page_template = '''
@@ -248,17 +250,20 @@ def add_watch_path():
 
 
 def finished_writing_callback(new_file_path):
+    logger.debug("New file %s" % new_file_path)
     filename, file_extension = os.path.splitext(new_file_path)
-    logger.debug("finished writing file, file extension: %s" % file_extension)
     if file_extension != ".mp3":
         logger.debug("Skipping non-mp3 file")
         return
     logger.info("Uploading new file: %s" % new_file_path)
+    update_path(new_file_path, STATUS_SCANNED)
     uploaded, matched, not_uploaded = mm.upload(new_file_path, enable_matching=False) # async me!
     if uploaded:
         logger.info("Uploaded song %s with ID %s" % (new_file_path, uploaded[new_file_path]))
+        update_path(new_file_path, STATUS_UPLOADED, uploaded[new_file_path])
     if matched:
         logger.info("Matched song %s with ID %s" % (new_file_path, matched[new_file_path]))
+        update_path(new_file_path, STATUS_UPLOADED, uploaded[new_file_path])
     if not_uploaded:
         logger.info("Unable to upload song %s because %s" % (new_file_path, not_uploaded[new_file_path]))
 
@@ -273,15 +278,29 @@ def make_sure_path_exists(path):
 
     return True
 
+def update_path(path, status, id=None):
+    logger.info("Updating path %s with id %s and status %s" % (path, id, status))
+    info = ((path,
+             "" if not id else id,
+             status)
+            )
+
+    con = sql.connect(DB_FILE)
+    with con:
+        cur = con.cursor()
+        cur.execute('''REPLACE INTO songs VALUES(?, ?, ?)''', info)
+
+
 def data_init():
+    logger.debug("Initializing database")
     con = sql.connect(DB_FILE)
     with con:
         cur = con.cursor()
 
         cur.execute('''CREATE TABLE IF NOT EXISTS songs(
-                        path text,
-                        id text,
-                        status text)''')
+                        path TEXT PRIMARY KEY,
+                        id TEXT,
+                        status TEXT)''')
 
 def read_config():
     global config
@@ -314,7 +333,11 @@ def main():
     read_config()
     if "watched_paths" in config:
         for path in config["watched_paths"]:
+            logger.info("Watching path %s" % path)
             fw.watch(path, finished_writing_callback)
+
+    # Initialize db if it doesn't exist
+    data_init()
 
 
     run(host='0.0.0.0', port=9090, debug=True)

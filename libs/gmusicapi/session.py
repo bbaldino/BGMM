@@ -128,7 +128,7 @@ class Musicmanager(_Base):
         try:
             super(Musicmanager, self).login()
         except AlreadyLoggedIn:
-            return False
+            return True
 
         try:
             # refresh the token right away to check auth validity
