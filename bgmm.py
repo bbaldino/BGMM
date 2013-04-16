@@ -9,7 +9,7 @@ from gmusicapi import Musicmanager
 import string
 from bottle.bottle import route, request, post, run, redirect
 import json
-import sqlite3
+import sqlite3 as sql
 
 mm = Musicmanager()
 logger = logging.getLogger("bgmm")
@@ -22,6 +22,7 @@ logger.addHandler(fh)
 OAUTH_PATH="/boot/config/appdata/gmu/"
 OAUTH_FILE="oauth.cred"
 CONFIG_FILE="/boot/config/plugins/bgmm/bgmm_config.cfg"
+DB_FILE="/boot/config/plugins/bgmm/bgmm.db"
 config = {}
 logged_in = False
 
@@ -271,6 +272,16 @@ def make_sure_path_exists(path):
             return False
 
     return True
+
+def data_init():
+    con = sql.connect(DB_FILE)
+    with con:
+        cur = con.cursor()
+
+        cur.execute('''CREATE TABLE IF NOT EXISTS songs(
+                        path text,
+                        id text,
+                        status text)''')
 
 def read_config():
     global config
