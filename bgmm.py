@@ -111,6 +111,7 @@ input[type=text] {{
         <li><a href="/main">Home</a></li>
         <li><a href="/config">Config</a></li>
         <li><a href="/logs">Logs</a></li>
+        <li><a href="/status">Status</a></li>
     </ul>
 </div>
 <div class="content">
@@ -211,6 +212,15 @@ def config():
 
     return generate_main_page(content_str)
 
+@route('/status')
+def status():
+    songs = get_all_songs()
+    html = ""
+    for song_path, song_info in songs.iteritems():
+        html += " ".join([song_path, song_info['status'], song_info['id']]) + "<br/>"
+    return generate_main_page(html)
+
+
 @route('/logs')
 def logs():
     with open("/tmp/gmu.log", "r") as f:
@@ -278,6 +288,8 @@ def make_sure_path_exists(path):
 
     return True
 
+# data store
+
 def update_path(path, status, id=None):
     logger.info("Updating path %s with id %s and status %s" % (path, id, status))
     info = ((path,
@@ -290,6 +302,23 @@ def update_path(path, status, id=None):
         cur = con.cursor()
         cur.execute('''REPLACE INTO songs VALUES(?, ?, ?)''', info)
 
+def get_all_songs():
+    songs = {}
+    con = sql.connect(DB_FILE)
+    with con:
+        cur = con.cursor()
+        for row in cur.execute('''SELECT * FROM songs'''):
+            song_path = row[0]
+            song_id = row[1]
+            song_status = row[2]
+            songs[song_path] = {'id': song_id,
+                                'status': song_status}
+
+    return songs
+
+
+
+# end data store
 
 def data_init():
     logger.debug("Initializing database")
