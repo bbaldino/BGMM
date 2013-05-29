@@ -30,104 +30,41 @@ STATUS_UPLOADED = "UPLOADED"
 
 # ----- Web -------
 main_page_template = '''
-<style>
-body {{
-    background-color:#b0c4de;
-}}
-
-div.header {{
-    font-size:xx-large;
-    font-family:monospace;
-    font-variant:small-caps;
-}}
-
-div.login_status {{
-    font-size:medium;
-    font-family:monospace;
-    float:right;
-}}
-
-div.navbar {{
-    width: 100%;
-    height: 28px;
-    #border: 5px solid gray;
-    background-color:#A3A3A3;
-}}
-
-ul {{
-    list-style-type:none;
-    margin:0;
-    padding:0;
-}}
-
-li {{
-    float: left;    
-}}
-
-div.navbar a:link, div.navbar a:visited {{
-    display:block;
-    width:120px;
-    font-weight:bold;
-    color:#FFFFFF;
-    background-color:#A3A3A3;
-    text-align:center;
-    padding:4px;
-    text-decoration:none;
-    text-transform:uppercase;
-}}
-
-div.navbar a:hover, div.navbar a:active {{
-    background-color:#006699;
-}}
-
-select {{
-    min-width: 100px;
-}}
-
-.footer {{
-    position:fixed;
-    bottom:0;
-    left:50%;
-    margin-left:-200px; /*negative half the width */    
-    width:400px;
-    height:100px;
-    
-    text-align: center;
-    vertical-align: middle;
-}}
-
-input[type=text] {{
-    min-width: 150px;
-}}
-</style>
-<div class="header">
-    bgmm
-    <div class="login_status">
-        {0}
-    </div>
-</div>
+<head>
+    <link href="http://bootswatch.com/cerulean/bootstrap.min.css" rel="stylesheet">
+</head>
 <div class="navbar">
-    <ul>
-        <li><a href="/main">Home</a></li>
-        <li><a href="/config">Config</a></li>
-        <li><a href="/logs">Logs</a></li>
-        <li><a href="/status">Status</a></li>
-    </ul>
-</div>
+    <div class="navbar-inner">
+        <div class="container">
+            <a class="brand" href="/main">BGMM</a>
+            <div class="nav-collapse">
+                <ul class="nav">
+                    <li><a href="/main">Home</a></li>
+                    <li><a href="/config">Config</a></li>
+                    <li><a href="/logs">Logs</a></li>
+                    <li><a href="/status">Status</a></li>
+                </ul>
+                <ul class="nav pull-right">
+                    {0}
+                </ul>
+            </div> <!-- nav-collapse -->
+        </div> <!-- container -->
+    </div> <!-- navbar-inner -->
+</div> <!-- navbar -->
 <div class="content">
     {1}
 </div>
-<div class="footer">    
+<footer id="footer">    
     bgmm version: .1<br/>    
-</div>
+</footer>
 '''
 
 def generate_main_page(content):
     global logged_in
     if logged_in:
-        login_status_str = "logged in<a href=\"/logout\">(logout)</a>"
+        login_status_str = "<li>logged in</li><li><a href=\"/logout\">(logout)</a></li>"
     else:
-        login_status_str = "Not logged in<a href=\"/\">(login)</a>"
+        login_status_str = "<li>Not logged in</li><li><a href=\"/\">(login)</a></li>"
     return main_page_template.format(login_status_str, content)
 
 @route('/')
@@ -180,30 +117,33 @@ def logout():
 def config():
     watched_paths = fw.get_watched_paths()
     content_str = '''
-<table>
-    <tr>
-        <td>
-            <form name="watchpath_add" method="POST" action="/add_watch_path">
-                Add a new path:<br/>
-                <input type="hidden" name="curr_page" value="/config">
-                <input name="path" type="text">
-                <br/>
-                <button type="submit">Add Path</button>
+    <div class="row">
+        <div class="span6 offset1">
+            <form class="form-horizontal well" name="watchpath_add" method="POST" action="/add_watch_path">
+                <div class="control-group">
+                    <label class="control-label" for="path">Add a new path:</label>
+                    <input type="hidden" name="curr_page" value="/config">
+                    <input id="path" class="input-large" name="path" type="text">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Add Path</button>
+                    <button type="reset" class="btn">Cancel</button>
+                </div>
             </form>
-        </td>
-        <td>
-            Watched Paths:<br/>
-            <form name="watchpath_remove" method="POST" action="/remove_watch_path">
-                <input type="hidden" name="curr_page" value="/config">
-                <select name="watchpaths" multiple="multiple">
-                    %s
-                </select>
-                <br/>
-                <button type="submit">Remove Path</button> 
+            <form class="form-horizontal well" name="watchpath_remove" method="POST" action="/remove_watch_path">
+                <div class="control-group">
+                    <label class="control-label" for "watchpaths">Watched Paths</label>
+                    <input type="hidden" name="curr_page" value="/config">
+                    <select id="watchpaths" name="watchpaths" multiple="multiple">
+                        %s
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" type="submit">Remove Path</button> 
+                </div>
             </form>
-        </td>
-    </tr>
-</tale>
+        </div>
+    </div>
 '''
     paths_str = ""
     for path in watched_paths.keys():
@@ -215,9 +155,27 @@ def config():
 @route('/status')
 def status():
     songs = get_all_songs()
-    html = ""
+    html = '''
+    <div class="row">
+        <div class="offset1">
+            <a href="/scan">Scan existing files</a>
+        </div>
+    </div>
+    <div class="row">
+        <div class="offset1">
+            <table class='table table-bordered table-striped table-hover'>
+                <thead>
+                    <tr>
+                        <th>Path</th>
+                        <th>Status</th>
+                        <th>Id<th>
+                    </tr>
+                <thead>
+                <tbody>
+    '''
     for song_path, song_info in songs.iteritems():
-        html += " ".join([song_path, song_info['status'], song_info['id']]) + "<br/>"
+        html = html + "<tr><td>" + song_path + "</td><td>" + song_info['status'] + "</td><td>" + song_info['id'] + "</td></tr>"
+    html += "</tbody></table></div></div>"
     return generate_main_page(html)
 
 
@@ -226,7 +184,20 @@ def logs():
     with open("/tmp/gmu.log", "r") as f:
         log_lines_desc = f.readlines()
         log_lines_desc.reverse()
-        return generate_main_page("<br />".join(log_lines_desc))
+        html = '''
+        <div class="row">
+            <div class="offset1">
+                <table class='table table-bordered table-striped table-hover'>
+                    <tbody>
+        '''
+        for log_line in log_lines_desc:
+            html = html + "<tr><td>" + log_line + "</td></tr>"
+        html += "</tbody></table></div></div>"
+        return generate_main_page(html)
+
+@route('/scan')
+def scan():
+    scan_existing_files(fw.get_watched_paths().keys())
 
 @post('/remove_watch_path')
 def remove_watch_path():
@@ -277,6 +248,21 @@ def finished_writing_callback(new_file_path):
     if not_uploaded:
         logger.info("Unable to upload song %s because %s" % (new_file_path, not_uploaded[new_file_path]))
 
+def scan_existing_files(watched_paths):
+    logger.debug("Scanning existing files in these directories: %s" % watched_paths)
+    for watched_path in watched_paths:
+        logger.debug("Scanning existing files in %s" % watched_path)
+        for root, subFolders, files in os.walk(watched_path):
+            logger.debug("root: %s, subfolders: %s, files: %s" % (root, subFolders, files))
+            for file in files:
+                filename, fileExtension = os.path.splitext(file)
+                logger.debug("looking at file %s, filename = %s, file extension = %s" % (file, filename, fileExtension))
+                if fileExtension == ".mp3":
+                    logger.debug("Found file %s" % file);
+    logger.debug("scanning finished");
+
+
+
 def make_sure_path_exists(path):
     try:
         os.makedirs(path)
@@ -315,8 +301,6 @@ def get_all_songs():
                                 'status': song_status}
 
     return songs
-
-
 
 # end data store
 
