@@ -32,9 +32,13 @@ def watch(file_path, finished_writing_callback):
     handler = EventHandler()
     handler.add_finished_writing_callback(finished_writing_callback)
     global notifier
+    logger.debug("Creating threaded notifier")
     notifier = ThreadedNotifier(wm, handler)
+    logger.debug("Starting threaded notifier")
     notifier.start()
+    logger.debug("Adding watch to watch manager");
     wdd = wm.add_watch(file_path, mask, rec=True, auto_add=True)
+    logger.debug("Added watch to watch manager");
     watches[file_path] = wdd[file_path]
     logger.debug("filewatch dict is now: %s" % watches)
 
