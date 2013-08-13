@@ -353,7 +353,7 @@ def main():
     data_init()
 
 
-    run(host='0.0.0.0', port=9090, debug=True)
+    run(host='0.0.0.0', port=config['PORT'], debug=True)
 
 
 if __name__ == "__main__":
