@@ -31,7 +31,7 @@ STATUS_UPLOADED = "UPLOADED"
 # ----- Web -------
 main_page_template = '''
 <head>
-    <link href="http://bootswatch.com/cerulean/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/theme.css" rel="stylesheet">
 </head>
 <div class="navbar">
     <div class="navbar-inner">
@@ -159,6 +159,7 @@ def status():
     <div class="row">
         <div class="offset1">
             <a href="/scan">Scan existing files</a>
+            <a href="/upload">Upload scanned files</a>
         </div>
     </div>
     <div class="row">
@@ -198,7 +199,16 @@ def logs():
 @route('/scan')
 def scan():
     scan_existing_files(fw.get_watched_paths().keys())
-    redirect('/config')
+    redirect('/status')
+
+@route('/upload')
+def upload_scanned():
+    songs = get_all_songs()
+    for song_path in songs.keys():
+        if songs[song_path]["status"] == STATUS_SCANNED:
+            logger.debug("Uploading song %s" % song_path)
+            upload(song_path)
+    redirect('/status')
 
 @post('/remove_watch_path')
 def remove_watch_path():
@@ -232,7 +242,7 @@ def add_watch_path():
 def get_static(filename, ext):
     logger.debug("Getting static file " + filename + " with extension " + ext)
     if ext == "css":
-        return static_file(filename + "." + ext, root='/public/stylesheets')
+        return static_file(filename + "." + ext, root='/boot/config/plugins/bgmm/bgmm/public/stylesheets')
 
 # ----- End Web -------
 
@@ -245,15 +255,25 @@ def finished_writing_callback(new_file_path):
         return
     logger.info("Uploading new file: %s" % new_file_path)
     update_path(new_file_path, STATUS_SCANNED)
-    uploaded, matched, not_uploaded = mm.upload(new_file_path, enable_matching=False) # async me!
+    upload(new_file_path)
+
+def upload(file_path):
+    uploaded, matched, not_uploaded = mm.upload(file_path, enable_matching=False) # async me!
     if uploaded:
-        logger.info("Uploaded song %s with ID %s" % (new_file_path, uploaded[new_file_path]))
-        update_path(new_file_path, STATUS_UPLOADED, uploaded[new_file_path])
+        logger.info("Uploaded song %s with ID %s" % (file_path, uploaded[file_path]))
+        update_path(file_path, STATUS_UPLOADED, uploaded[file_path])
     if matched:
-        logger.info("Matched song %s with ID %s" % (new_file_path, matched[new_file_path]))
-        update_path(new_file_path, STATUS_UPLOADED, uploaded[new_file_path])
+        logger.info("Matched song %s with ID %s" % (file_path, matched[file_path]))
+        update_path(file_path, STATUS_UPLOADED, uploaded[file_path])
     if not_uploaded:
-        logger.info("Unable to upload song %s because %s" % (new_file_path, not_uploaded[new_file_path]))
+        reason_string = not_uploaded[file_path]
+        if "ALREADY_EXISTS" in reason_string:
+            song_id = reason_string[reason_string.find("(") + 1 : reason_string.find(")")]
+            logger.info("Song already exists with ID %s, updating database" % song_id)
+            # The song ID is located within parentheses in the reason string
+            update_path(file_path, STATUS_UPLOADED, song_id)
+        else:
+            logger.info("Unable to upload song %s because %s" % (file_path, reason_string))
 
 def scan_existing_files(watched_paths):
     logger.debug("Scanning existing files in these directories: %s" % watched_paths)
@@ -266,6 +286,7 @@ def scan_existing_files(watched_paths):
                 logger.debug("looking at file %s, filename = %s, file extension = %s" % (file, filename, fileExtension))
                 if fileExtension == ".mp3":
                     logger.debug("Found file %s" % file);
+                    update_path(os.path.join(root, file), STATUS_SCANNED)
     logger.debug("scanning finished");
 
 
