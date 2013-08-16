@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(base_path, 'libs'))
 import file_watcher as fw
 from gmusicapi import Musicmanager
 import string
-from bottle.bottle import route, request, post, run, redirect
+from bottle.bottle import route, request, post, run, redirect, static_file
 import json
 import sqlite3 as sql
 
@@ -198,6 +198,7 @@ def logs():
 @route('/scan')
 def scan():
     scan_existing_files(fw.get_watched_paths().keys())
+    redirect('/config')
 
 @post('/remove_watch_path')
 def remove_watch_path():
@@ -226,6 +227,12 @@ def add_watch_path():
         config["watched_paths"].append(path)
     write_config(config)
     redirect(curr_page)
+
+@route('/static/:filename.:ext')
+def get_static(filename, ext):
+    logger.debug("Getting static file " + filename + " with extension " + ext)
+    if ext == "css":
+        return static_file(filename + "." + ext, root='/public/stylesheets')
 
 # ----- End Web -------
 
