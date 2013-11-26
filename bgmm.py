@@ -7,14 +7,18 @@ sys.path.insert(0, os.path.join(base_path, 'libs'))
 import file_watcher as fw
 from gmusicapi import Musicmanager
 import string
-from bottle.bottle import route, request, post, run, redirect, static_file
+from oauth2client.client import OAuth2WebServerFlow
+from bottle import bottle
+from bottle.bottle import route, request, post, run, redirect, static_file, template
 import json
 import sqlite3 as sql
 
+bottle.TEMPLATE_PATH.insert(0,'/boot/config/plugins/bgmm/bgmm/views')
 mm = Musicmanager()
+LOG_LOCATION = "/tmp/bgmm.log"
 logger = logging.getLogger("bgmm")
 logger.setLevel(logging.DEBUG)
-fh = logging.FileHandler("/tmp/gmu.log")
+fh = logging.FileHandler(LOG_LOCATION)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
 logger.addHandler(fh)
@@ -27,61 +31,29 @@ config = {}
 logged_in = False
 STATUS_SCANNED = "SCANNED"
 STATUS_UPLOADED = "UPLOADED"
+SONGS_PER_PAGE = 3
 
 # ----- Web -------
-main_page_template = '''
-<head>
-    <link href="/static/theme.css" rel="stylesheet">
-</head>
-<div class="navbar">
-    <div class="navbar-inner">
-        <div class="container">
-            <a class="brand" href="/main">BGMM</a>
-            <div class="nav-collapse">
-                <ul class="nav">
-                    <li><a href="/main">Home</a></li>
-                    <li><a href="/config">Config</a></li>
-                    <li><a href="/logs">Logs</a></li>
-                    <li><a href="/status">Status</a></li>
-                </ul>
-                <ul class="nav pull-right">
-                    {0}
-                </ul>
-            </div> <!-- nav-collapse -->
-        </div> <!-- container -->
-    </div> <!-- navbar-inner -->
-</div> <!-- navbar -->
-<div class="content">
-    {1}
-</div>
-<footer id="footer">    
-    bgmm version: .1<br/>    
-</footer>
-'''
 
-def generate_main_page(content):
-    global logged_in
-    if logged_in:
-        login_status_str = "<li>logged in</li><li><a href=\"/logout\">(logout)</a></li>"
-    else:
-        login_status_str = "<li>Not logged in</li><li><a href=\"/\">(login)</a></li>"
-    return main_page_template.format(login_status_str, content)
+class Song:
+    def __init__(self, path, status, id):
+        self.path = path
+        self.status = status
+        self.id = id
+
+def check_login(fn):
+    def check_logged_in(**kwargs):
+        if not logged_in:
+            oauth_uri = mm.get_oauth_uri()
+            return template('login', session_status={"logged_in": logged_in}, oauth_uri=oauth_uri)
+        else:
+            return fn(**kwargs)
+    return check_logged_in
 
 @route('/')
+@check_login
 def root():
-    global logged_in
-    logger.debug("Logging in!")
-    if not mm.login(os.path.join(OAUTH_PATH, OAUTH_FILE)):
-        oauth_uri = mm.get_oauth_uri()
-        return generate_main_page(("Need to perform oauth, please visit <a href=\"%s\">this url</a> and paste the key you receive here: \
-                  <form method=\"POST\" action=\"/submit_oauth_key\"> \
-                    <input name=\"oauth_key\" type=\"text\"/> \
-                    <input type=\"submit\" /> \
-                  </form>" % oauth_uri))
-    else:
-        logger.debug("Logged in!")
-        logged_in = True
-        redirect("/main")
+    redirect("/main")
 
 @post('/submit_oauth_key')
 def oauth_submit():
@@ -90,7 +62,8 @@ def oauth_submit():
         logger.error("Error creating oauth cred path: %s" % OAUTH_PATH)
         return
     try:
-        mm.set_oauth_code(oauth_key, os.path.join(OAUTH_PATH, OAUTH_FILE))
+        res = mm.set_oauth_code(oauth_key, os.path.join(OAUTH_PATH, OAUTH_FILE))
+        logger.error("RES = %s" % res)
     except Exception as e:
         return "Error with login: %s" % e
     else:
@@ -101,9 +74,14 @@ def oauth_submit():
             logged_in = True
             redirect("/main")
 
+@route('/auth')
+def auth():
+    return "Auth callback!"
+
 @route('/main')
+@check_login
 def main():
-    return generate_main_page("Welcome!")
+    return template('default', content="Welcome!", session_status={"logged_in": logged_in})
 
 @route('/logout')
 def logout():
@@ -114,94 +92,41 @@ def logout():
     redirect("/")
 
 @route('/config')
+@check_login
 def config():
     watched_paths = fw.get_watched_paths()
-    content_str = '''
-    <div class="row">
-        <div class="span6 offset1">
-            <form class="form-horizontal well" name="watchpath_add" method="POST" action="/add_watch_path">
-                <div class="control-group">
-                    <label class="control-label" for="path">Add a new path:</label>
-                    <input type="hidden" name="curr_page" value="/config">
-                    <input id="path" class="input-large" name="path" type="text">
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Add Path</button>
-                    <button type="reset" class="btn">Cancel</button>
-                </div>
-            </form>
-            <form class="form-horizontal well" name="watchpath_remove" method="POST" action="/remove_watch_path">
-                <div class="control-group">
-                    <label class="control-label" for "watchpaths">Watched Paths</label>
-                    <input type="hidden" name="curr_page" value="/config">
-                    <select id="watchpaths" name="watchpaths" multiple="multiple">
-                        %s
-                    </select>
-                </div>
-                <div class="form-actions">
-                    <button class="btn btn-primary" type="submit">Remove Path</button> 
-                </div>
-            </form>
-        </div>
-    </div>
-'''
-    paths_str = ""
-    for path in watched_paths.keys():
-        paths_str += "<option value=\"%s\">%s</option>" % (path, path)
-    content_str = content_str % paths_str
-
-    return generate_main_page(content_str)
+    return template('config', session_status={"logged_in": logged_in}, watched_paths = watched_paths.keys())
 
 @route('/status')
+@check_login
 def status():
+    page = int(request.query.page) if request.query.page else 1
     songs = get_all_songs()
-    html = '''
-    <div class="row">
-        <div class="offset1">
-            <a href="/scan">Scan existing files</a>
-            <a href="/upload">Upload scanned files</a>
-        </div>
-    </div>
-    <div class="row">
-        <div class="offset1">
-            <table class='table table-bordered table-striped table-hover'>
-                <thead>
-                    <tr>
-                        <th>Path</th>
-                        <th>Status</th>
-                        <th>Id<th>
-                    </tr>
-                <thead>
-                <tbody>
-    '''
-    for song_path, song_info in songs.iteritems():
-        html = html + "<tr><td>" + song_path + "</td><td>" + song_info['status'] + "</td><td>" + song_info['id'] + "</td></tr>"
-    html += "</tbody></table></div></div>"
-    return generate_main_page(html)
+    num_pages = int(len(songs.keys()) / SONGS_PER_PAGE) + 1
+    start_song = ((page - 1) * SONGS_PER_PAGE)
+    end_song = ((page - 1) * SONGS_PER_PAGE) + SONGS_PER_PAGE
+    logger.debug("displaying results for page %s, showing songs %s to %s" % (page, (page * SONGS_PER_PAGE), (page * SONGS_PER_PAGE) + SONGS_PER_PAGE))
+    page_songs = []
+    for song_path in songs.keys()[start_song : end_song]:
+        page_songs.append(Song(song_path, songs[song_path]['status'], songs[song_path]['id']))
 
+    return template('status', session_status={"logged_in": logged_in}, songs=page_songs, num_pages=num_pages, curr_page=page)
 
 @route('/logs')
 def logs():
-    with open("/tmp/gmu.log", "r") as f:
+    with open(LOG_LOCATION, "r") as f:
         log_lines_desc = f.readlines()
         log_lines_desc.reverse()
-        html = '''
-        <div class="row">
-            <div class="offset1">
-                <table class='table table-bordered table-striped table-hover'>
-                    <tbody>
-        '''
-        for log_line in log_lines_desc:
-            html = html + "<tr><td>" + log_line + "</td></tr>"
-        html += "</tbody></table></div></div>"
-        return generate_main_page(html)
+        return template('logs', session_status={"logged_in": logged_in}, log_lines=log_lines_desc)
 
 @route('/scan')
+@check_login
 def scan():
     scan_existing_files(fw.get_watched_paths().keys())
     redirect('/status')
 
 @route('/upload')
+@check_login
 def upload_scanned():
     songs = get_all_songs()
     for song_path in songs.keys():
@@ -210,7 +135,14 @@ def upload_scanned():
             upload(song_path)
     redirect('/status')
 
+@post('/login')
+def login():
+    username = request.forms.get('username')
+    password = request.forms.get('password')
+    logger.info("got username %s and password %s " % (username, password))
+
 @post('/remove_watch_path')
+@check_login
 def remove_watch_path():
     curr_page = request.forms.get('curr_page')
     path_strs = ""
@@ -225,6 +157,7 @@ def remove_watch_path():
     redirect(curr_page)
 
 @post('/add_watch_path')
+@check_login
 def add_watch_path():
     path = request.forms.get('path')
     curr_page = request.forms.get('curr_page')
