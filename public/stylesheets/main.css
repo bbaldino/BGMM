@@ -1,0 +1,21 @@
+body {
+    padding-top: 60px;
+}
+
+#status_label {
+    padding-top: 15px;
+    padding-bottom: 15px;
+}
+
+select#watchpaths {
+    width: 300px;
+}
+
+input#path {
+    width: 200px;
+}
+
+.col-centered {
+    float: none;
+    margin: 0 auto;
+}

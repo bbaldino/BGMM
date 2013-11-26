@@ -31,7 +31,7 @@ config = {}
 logged_in = False
 STATUS_SCANNED = "SCANNED"
 STATUS_UPLOADED = "UPLOADED"
-SONGS_PER_PAGE = 3
+SONGS_PER_PAGE = 10
 
 # ----- Web -------
 
