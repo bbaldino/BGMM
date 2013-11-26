@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 """Definitions shared by multiple clients."""
@@ -14,6 +13,8 @@ from gmusicapi.exceptions import (
     CallFailure, ParseException, ValidationException,
 )
 from gmusicapi.utils import utils
+
+import requests
 
 log = utils.DynamicClientLogger(__name__)
 
@@ -45,7 +46,7 @@ class BuildRequestMeta(type):
         new_cls = super(BuildRequestMeta, cls).__new__(cls, name, bases, dct)
 
         merge_keys = ('headers', 'params')
-        all_keys = ('method', 'url', 'files', 'data', 'verify') + merge_keys
+        all_keys = ('method', 'url', 'files', 'data', 'verify', 'allow_redirects') + merge_keys
 
         config = {}  # stores key: val for static or f(*args, **kwargs) -> val for dyn
         dyn = lambda key: 'dynamic_' + key
@@ -64,7 +65,7 @@ class BuildRequestMeta(type):
 
         for key in merge_keys:
             #merge case: dyn took precedence above, but stat also exists
-            if dyn(key) in config and has_key(stat(key)):
+            if has_key(dyn(key)) and has_key(stat(key)):
                 def key_closure(stat_val=get_key(stat(key)), dyn_func=get_key(dyn(key))):
                     def build_key(*args, **kwargs):
                         dyn_val = dyn_func(*args, **kwargs)
@@ -88,7 +89,6 @@ class BuildRequestMeta(type):
                     req_kwargs[key] = val
 
                 return req_kwargs
-                #return Request(**req_kwargs)
             return build_request
 
         new_cls.build_request = classmethod(req_closure())
@@ -183,11 +183,12 @@ class Call(object):
         return msg  # default to identity
 
     @classmethod
-    def perform(cls, session, *args, **kwargs):
+    def perform(cls, session, validate, *args, **kwargs):
         """Send, parse, validate and check success of this call.
         *args and **kwargs are passed to protocol.build_transaction.
 
         :param session: a PlaySession used to send this request.
+        :param validate: if False, do not validate
         """
         #TODO link up these docs
 
@@ -200,40 +201,74 @@ class Call(object):
                       dict((k, utils.truncate(v)) for (k, v) in kwargs.items())
                       )
         else:
-            log.debug("%s(<does not get logged>)", call_name)
+            log.debug("%s(<omitted>)", call_name)
 
         req_kwargs = cls.build_request(*args, **kwargs)
 
         response = session.send(req_kwargs, cls.required_auth)
+        #TODO trim the logged response if it's huge?
 
-        #TODO check return code
+        safe_req_kwargs = req_kwargs.copy()
+        if safe_req_kwargs.get('headers', {}).get('Authorization', None) is not None:
+            safe_req_kwargs['headers']['Authorization'] = '<omitted>'
+
+        # check response code
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as e:
+            err_msg = str(e)
+
+            if cls.gets_logged:
+                err_msg += "\n(requests kwargs: %r)" % (safe_req_kwargs)
+                err_msg += "\n(response was: %r)" % response.content
+
+            raise CallFailure(err_msg, call_name)
 
         try:
-            msg = cls.parse_response(response)
+            parsed_response = cls.parse_response(response)
         except ParseException:
+            err_msg = ("the server's response could not be understood."
+                       " The call may still have succeeded, but it's unlikely.")
             if cls.gets_logged:
-                log.exception("couldn't parse %s response: %r", call_name, response.content)
-            raise CallFailure("the server's response could not be understood."
-                              " The call may still have succeeded, but it's unlikely.",
-                              call_name)
+                err_msg += "\n(requests kwargs: %r)" % (safe_req_kwargs)
+                err_msg += "\n(response was: %r)" % response.content
+                log.exception("could not parse %s response: %r", call_name, response.content)
+            else:
+                log.exception("could not parse %s response: (omitted)", call_name)
+
+            raise CallFailure(err_msg, call_name)
 
         if cls.gets_logged:
-            log.debug(cls.filter_response(msg))
+            log.debug(cls.filter_response(parsed_response))
 
         try:
             #order is important; validate only has a schema for a successful response
-            cls.check_success(response, msg)
-            cls.validate(response, msg)
+            cls.check_success(response, parsed_response)
+            if validate:
+                cls.validate(response, parsed_response)
         except CallFailure:
             raise
-        except ValidationException:
-            #TODO link to some protocol for reporting this and trim the response if it's huge
-            if cls.gets_logged:
-                msg_fmt = ("please report (at http://goo.gl/qbAW8) the following"
-                           " unknown response format for %s: %r")
-                log.exception(msg_fmt, call_name, msg)
+        except ValidationException as e:
+            #TODO shouldn't be using formatting
+            err_msg = "the response format for %s was not recognized." % call_name
+            err_msg += "\n\n%s\n" % e
 
-        return msg
+            if cls.gets_logged:
+                raw_response = response.content
+
+                if len(raw_response) > 1000:
+                    raw_response = raw_response[:1000] + '...'
+
+                err_msg += ("\nFirst, try the develop branch."
+                            " If you can recreate this error with the most recent code"
+                            " please [create an issue](http://goo.gl/qbAW8) that includes"
+                            " the above ValidationException"
+                            " and the following request/response:\n%r\n\n%r\n"
+                            "\nA traceback follows:\n") % (safe_req_kwargs, raw_response)
+
+            log.exception(err_msg)
+
+        return parsed_response
 
     @staticmethod
     def _parse_json(text):

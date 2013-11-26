@@ -1,17 +1,16 @@
-from collections import namedtuple
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 """
 Tests that don't hit the Google Music servers.
 """
 
+from collections import namedtuple
 import time
 
 from mock import MagicMock as Mock
 from proboscis.asserts import (
     assert_raises, assert_true, assert_false, assert_equal,
-    assert_is_not
+    assert_is_not, Check
 )
 from proboscis import test
 
@@ -19,6 +18,7 @@ import gmusicapi.session
 from gmusicapi.clients import Webclient, Musicmanager
 from gmusicapi.exceptions import AlreadyLoggedIn  # ,NotLoggedIn
 from gmusicapi.protocol.shared import authtypes
+from gmusicapi.protocol import mobileclient
 from gmusicapi.utils import utils
 
 
@@ -55,6 +55,22 @@ def no_client_auth_initially():
 
     mm = Musicmanager()
     assert_false(mm.is_authenticated())
+
+
+@test
+def mm_prevents_bad_mac_format():
+    mm = create_clients().musicmanager
+
+    with Check() as check:
+        for bad_mac in ['bogus',
+                        '11:22:33:44:55:66:',
+                        '11:22:33:44:55:ab',
+                        '11:22:33:44:55']:
+            check.raises(
+                ValueError,
+                mm._perform_upauth,
+                uploader_id=bad_mac,
+                uploader_name='valid')
 
 
 # @test
@@ -151,6 +167,13 @@ def authtypes_factory_args():
     assert_true(auth.oauth)
     assert_false(auth.sso)
     assert_false(auth.xt)
+
+
+@test
+def mc_url_signing():
+    sig, _ = mobileclient.GetStreamUrl.get_signature("Tdr6kq3xznv5kdsphyojox6dtoq",
+                                                     "1373247112519")
+    assert_equal(sig, "gua1gInBdaVo7_dSwF9y0kodua0")
 
 
 ##
