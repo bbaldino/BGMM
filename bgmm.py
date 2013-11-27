@@ -4,6 +4,7 @@ base_path = os.path.dirname(os.path.abspath(__file__))
 # Insert local libs dir into path
 sys.path.insert(0, os.path.join(base_path, 'libs'))
 
+from collections import namedtuple
 import file_watcher as fw
 from gmusicapi import Musicmanager
 import string
@@ -12,6 +13,7 @@ from bottle import bottle
 from bottle.bottle import route, request, post, run, redirect, static_file, template
 import json
 import sqlite3 as sql
+import requests
 
 bottle.TEMPLATE_PATH.insert(0,'/boot/config/plugins/bgmm/bgmm/views')
 mm = Musicmanager()
@@ -32,6 +34,17 @@ logged_in = False
 STATUS_SCANNED = "SCANNED"
 STATUS_UPLOADED = "UPLOADED"
 SONGS_PER_PAGE = 10
+oauth_token = None
+
+OAuthInfo = namedtuple('OAuthInfo', 'client_id client_secret scope redirect')
+oauth_info = OAuthInfo(
+    '70206993729-v1e9qjv0ia5bm56v6l325vmiaj5vm2qb.apps.googleusercontent.com',
+    'PhBciko_1b5bTFJ3mHicDyJ1',
+    ['https://www.googleapis.com/auth/musicmanager', 'email'],
+    'urn:ietf:wg:oauth:2.0:oob'
+)
+
+oauth2_flow = OAuth2WebServerFlow(*oauth_info)
 
 # ----- Web -------
 
@@ -41,10 +54,15 @@ class Song:
         self.status = status
         self.id = id
 
+def get_email():
+    logger.debug("getting email with token %s" % oauth_token)
+    r = requests.get("https://www.googleapis.com/oauth2/v1/userinfo?access_token=" + oauth_token)
+    return r.json()["email"]
+
 def check_login(fn):
     def check_logged_in(**kwargs):
         if not logged_in:
-            oauth_uri = mm.get_oauth_uri()
+            oauth_uri = oauth2_flow.step1_get_authorize_url()
             return template('login', session_status={"logged_in": logged_in}, oauth_uri=oauth_uri)
         else:
             return fn(**kwargs)
@@ -62,12 +80,16 @@ def oauth_submit():
         logger.error("Error creating oauth cred path: %s" % OAUTH_PATH)
         return
     try:
-        res = mm.set_oauth_code(oauth_key, os.path.join(OAUTH_PATH, OAUTH_FILE))
-        logger.error("RES = %s" % res)
+        credentials = oauth2_flow.step2_exchange(oauth_key)
     except Exception as e:
         return "Error with login: %s" % e
     else:
-        if not mm.login(os.path.join(OAUTH_PATH, OAUTH_FILE)):
+        global oauth_token
+        oauth_token = credentials.access_token
+        get_email() # doing it here for just a test to make sure it worked
+        # TODO store the credentials in the user directory
+        # TODO create directories per-user, store all config for each user in their dir
+        if not mm.login(credentials):
             return "Error with login, incorrect code?"
         else:
             global logged_in
