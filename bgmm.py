@@ -41,6 +41,10 @@ class DirInfo:
     def get_oauth_file_path(email):
         return os.path.join(DirInfo.BaseAppDataDir, email, "oauth.cred")
 
+    @staticmethod
+    def get_user_data_file_path(email):
+        return os.path.join(DirInfo.BaseAppDataDir, email, "user_config.cfg")
+
 class FileStatus:
     Scanned = "SCANNED"
     Uploaded = "UPLOADED"
@@ -62,6 +66,10 @@ class Song:
         self.path = path
         self.status = status
         self.id = id
+
+def get_watched_paths(email):
+    config = read_config(DirInfo.get_user_data_file_path(email))
+    return config["watched_paths"]
 
 def get_email(oauth_token):
     r = requests.get("https://www.googleapis.com/oauth2/v1/userinfo?access_token=" + oauth_token)
@@ -132,8 +140,9 @@ def logout():
 @route('/config')
 @check_login
 def config():
-    watched_paths = fw.get_watched_paths()
-    return template('config', session_status={"logged_in": logged_in}, watched_paths = watched_paths.keys())
+    session = get_session()
+    watched_paths = get_watched_paths(session["email"])
+    return template('config', session_status={"logged_in": logged_in}, watched_paths = watched_paths)
 
 @route('/status')
 @check_login
@@ -160,7 +169,8 @@ def logs():
 @route('/scan')
 @check_login
 def scan():
-    scan_existing_files(fw.get_watched_paths().keys())
+    session = get_session()
+    scan_existing_files(get_watched_paths(session["email"]))
     redirect('/status')
 
 @route('/upload')
@@ -182,29 +192,31 @@ def upload_scanned():
 @post('/remove_watch_path')
 @check_login
 def remove_watch_path():
+    session = get_session()
     curr_page = request.forms.get('curr_page')
     path_strs = ""
     for path in request.forms.getlist('watchpaths'):
         fw.remove_watch(path)
-    config = read_config(DirInfo.AppConfig)
+    config = read_config(DirInfo.get_user_data_file_path(session["email"]))
     if "watched_paths" in config:
         for path in request.forms.getlist('watchpaths'):
             config["watched_paths"].remove(path)
-    write_config(config, DirInfo.AppConfig)
+    write_config(config, DirInfo.get_user_data_file_path(session["email"]))
     redirect(curr_page)
 
 @post('/add_watch_path')
 @check_login
 def add_watch_path():
+    session = get_session()
     path = request.forms.get('path')
     curr_page = request.forms.get('curr_page')
     fw.watch(path, finished_writing_callback)
-    config = read_config(DirInfo.AppConfig)
+    config = read_config(DirInfo.get_user_data_file_path(session["email"]))
     if "watched_paths" not in config:
         config["watched_paths"] = [path]
     else:
         config["watched_paths"].append(path)
-    write_config(config, DirInfo.AppConfig)
+    write_config(config, DirInfo.get_user_data_file_path(session["email"]))
     redirect(curr_page)
 
 @route('/static/:filename.:ext')
