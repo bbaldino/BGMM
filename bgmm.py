@@ -76,6 +76,9 @@ def check_login(fn):
             return fn(**kwargs)
     return check_logged_in
 
+def get_session():
+    return bottle.request.environ.get('beaker.session')
+
 @route('/')
 @check_login
 def root():
@@ -90,7 +93,7 @@ def oauth_submit():
         return "Error with login: %s" % e
     else:
         email = get_email(credentials.access_token)
-        session = bottle.request.environ.get('beaker.session')
+        session = get_session()
         session["email"] = email
         oauth_path = DirInfo.get_oauth_file_path(email)
         make_sure_path_exists(os.path.dirname(oauth_path))
@@ -114,7 +117,7 @@ def main():
 
 @route('/logout')
 def logout():
-    session = bottle.request.environ.get('beaker.session')
+    session = get_session()
     email = session["email"]
     logger.debug("logging out, email: %s" % email)
     mm.logout()
@@ -170,11 +173,11 @@ def upload_scanned():
             upload(song_path)
     redirect('/status')
 
-@post('/login')
-def login():
-    username = request.forms.get('username')
-    password = request.forms.get('password')
-    logger.info("got username %s and password %s " % (username, password))
+#@post('/login')
+#def login():
+#    username = request.forms.get('username')
+#    password = request.forms.get('password')
+#    logger.info("got username %s and password %s " % (username, password))
 
 @post('/remove_watch_path')
 @check_login
