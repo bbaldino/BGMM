@@ -307,8 +307,12 @@ def data_init():
                         status TEXT)''')
 
 def read_config(config_file):
-    with open(config_file, "r") as f:
-        return json.load(f)
+    try:
+        with open(config_file, "r") as f:
+            return json.load(f)
+    except IOError as e:
+        pass
+    return {}
 
 def write_config(config, config_file):
     with open(config_file, "w+") as f:
