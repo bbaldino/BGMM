@@ -25,14 +25,17 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 fh.setFormatter(formatter)
 logger.addHandler(fh)
 
-OAUTH_PATH="/boot/config/appdata/gmu/"
-OAUTH_FILE="oauth.cred"
-CONFIG_FILE="/boot/config/plugins/bgmm/bgmm_config.cfg"
-DB_FILE="/boot/config/plugins/bgmm/bgmm.db"
-config = {}
 logged_in = False
 SONGS_PER_PAGE = 10
 oauth_token = None
+
+class DirInfo:
+    BaseAppDir = "/boot/config/plugins/bgmm/"
+    BaseAppDataDir = "/boot/config/appdata/gmu/"
+    
+    OAuthFile = BaseAppDataDir + "oauth.cred"
+    AppConfig = BaseAppDir + "bgmm_config.cfg"
+    DBFile = BaseAppDir + "bgmm.db"
 
 class FileStatus:
     Scanned = "SCANNED"
@@ -78,9 +81,9 @@ def root():
 @post('/submit_oauth_key')
 def oauth_submit():
     oauth_key = request.forms.get('oauth_key')
-    if not make_sure_path_exists(OAUTH_PATH):
-        logger.error("Error creating oauth cred path: %s" % OAUTH_PATH)
-        return
+    #if not make_sure_path_exists(OAUTH_PATH):
+    #    logger.error("Error creating oauth cred path: %s" % OAUTH_PATH)
+    #    return
     try:
         credentials = oauth2_flow.step2_exchange(oauth_key)
     except Exception as e:
@@ -110,7 +113,10 @@ def main():
 @route('/logout')
 def logout():
     mm.logout()
-    os.remove(os.path.join(OAUTH_PATH, OAUTH_FILE))
+    try:
+        os.remove(DirInfo.OAuthFile)
+    except OSError as e:
+        logger.info("Error logging out: %s" % e)
     global logged_in
     logged_in = False
     redirect("/")
@@ -172,12 +178,11 @@ def remove_watch_path():
     path_strs = ""
     for path in request.forms.getlist('watchpaths'):
         fw.remove_watch(path)
-    global config
-    read_config()
+    config = read_config(DirInfo.AppConfig)
     if "watched_paths" in config:
         for path in request.forms.getlist('watchpaths'):
             config["watched_paths"].remove(path)
-    write_config(config)
+    write_config(config, DirInfo.AppConfig)
     redirect(curr_page)
 
 @post('/add_watch_path')
@@ -186,13 +191,12 @@ def add_watch_path():
     path = request.forms.get('path')
     curr_page = request.forms.get('curr_page')
     fw.watch(path, finished_writing_callback)
-    read_config()
-    global config
+    config = read_config(DirInfo.AppConfig)
     if "watched_paths" not in config:
         config["watched_paths"] = [path]
     else:
         config["watched_paths"].append(path)
-    write_config(config)
+    write_config(config, DirInfo.AppConfig)
     redirect(curr_page)
 
 @route('/static/:filename.:ext')
@@ -202,7 +206,6 @@ def get_static(filename, ext):
         return static_file(filename + "." + ext, root='/boot/config/plugins/bgmm/bgmm/public/stylesheets')
 
 # ----- End Web -------
-
 
 def finished_writing_callback(new_file_path):
     logger.debug("New file %s" % new_file_path)
@@ -246,8 +249,6 @@ def scan_existing_files(watched_paths):
                     update_path(os.path.join(root, file), FileStatus.Scanned)
     logger.debug("scanning finished");
 
-
-
 def make_sure_path_exists(path):
     try:
         os.makedirs(path)
@@ -268,14 +269,14 @@ def update_path(path, status, id=None):
              status)
             )
 
-    con = sql.connect(DB_FILE)
+    con = sql.connect(DirInfo.DBFile)
     with con:
         cur = con.cursor()
         cur.execute('''REPLACE INTO songs VALUES(?, ?, ?)''', info)
 
 def get_all_songs():
     songs = {}
-    con = sql.connect(DB_FILE)
+    con = sql.connect(DirInfo.DBFile)
     with con:
         cur = con.cursor()
         for row in cur.execute('''SELECT * FROM songs'''):
@@ -291,7 +292,7 @@ def get_all_songs():
 
 def data_init():
     logger.debug("Initializing database")
-    con = sql.connect(DB_FILE)
+    con = sql.connect(DirInfo.DBFile)
     with con:
         cur = con.cursor()
 
@@ -300,13 +301,12 @@ def data_init():
                         id TEXT,
                         status TEXT)''')
 
-def read_config():
-    global config
-    with open(CONFIG_FILE, "r") as f:
-        config = json.load(f)
+def read_config(config_file):
+    with open(config_file, "r") as f:
+        return json.load(f)
 
-def write_config(config):
-    with open(CONFIG_FILE, "w+") as f:
+def write_config(config, config_file):
+    with open(config_file, "w+") as f:
         json.dump(config, f)
 
 def main():
@@ -327,8 +327,7 @@ def main():
             logger.debug("Writing pidfile to %s" % pidfile)
             f.write(str(os.getpid()))
     # Start watching any previously configured paths
-    global config
-    read_config()
+    config = read_config(DirInfo.AppConfig)
     if "watched_paths" in config:
         for path in config["watched_paths"]:
             logger.info("Watching path %s" % path)
@@ -339,7 +338,6 @@ def main():
 
 
     run(host='0.0.0.0', port=config['PORT'], debug=True)
-
 
 if __name__ == "__main__":
     main()
