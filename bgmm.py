@@ -9,8 +9,10 @@ import file_watcher as fw
 from gmusicapi import Musicmanager
 import string
 from oauth2client.client import OAuth2WebServerFlow
+import oauth2client.file
 from bottle import bottle
 from bottle.bottle import route, request, post, run, redirect, static_file, template
+from beaker.middleware import SessionMiddleware
 import json
 import sqlite3 as sql
 import requests
@@ -27,15 +29,17 @@ logger.addHandler(fh)
 
 logged_in = False
 SONGS_PER_PAGE = 10
-oauth_token = None
 
 class DirInfo:
     BaseAppDir = "/boot/config/plugins/bgmm/"
-    BaseAppDataDir = "/boot/config/appdata/gmu/"
+    BaseAppDataDir = "/boot/config/appdata/bgmm/"
     
-    OAuthFile = BaseAppDataDir + "oauth.cred"
-    AppConfig = BaseAppDir + "bgmm_config.cfg"
-    DBFile = BaseAppDir + "bgmm.db"
+    AppConfig = os.path.join(BaseAppDir, "bgmm_config.cfg")
+    DBFile = os.path.join(BaseAppDir, "bgmm.db")
+
+    @staticmethod
+    def get_oauth_file_path(email):
+        return os.path.join(DirInfo.BaseAppDataDir, email, "oauth.cred")
 
 class FileStatus:
     Scanned = "SCANNED"
@@ -59,8 +63,7 @@ class Song:
         self.status = status
         self.id = id
 
-def get_email():
-    logger.debug("getting email with token %s" % oauth_token)
+def get_email(oauth_token):
     r = requests.get("https://www.googleapis.com/oauth2/v1/userinfo?access_token=" + oauth_token)
     return r.json()["email"]
 
@@ -81,19 +84,18 @@ def root():
 @post('/submit_oauth_key')
 def oauth_submit():
     oauth_key = request.forms.get('oauth_key')
-    #if not make_sure_path_exists(OAUTH_PATH):
-    #    logger.error("Error creating oauth cred path: %s" % OAUTH_PATH)
-    #    return
     try:
         credentials = oauth2_flow.step2_exchange(oauth_key)
     except Exception as e:
         return "Error with login: %s" % e
     else:
-        global oauth_token
-        oauth_token = credentials.access_token
-        get_email() # doing it here for just a test to make sure it worked
-        # TODO store the credentials in the user directory
-        # TODO create directories per-user, store all config for each user in their dir
+        email = get_email(credentials.access_token)
+        session = bottle.request.environ.get('beaker.session')
+        session["email"] = email
+        oauth_path = DirInfo.get_oauth_file_path(email)
+        make_sure_path_exists(os.path.dirname(oauth_path))
+        storage = oauth2client.file.Storage(oauth_path)
+        storage.put(credentials)
         if not mm.login(credentials):
             return "Error with login, incorrect code?"
         else:
@@ -112,9 +114,12 @@ def main():
 
 @route('/logout')
 def logout():
+    session = bottle.request.environ.get('beaker.session')
+    email = session["email"]
+    logger.debug("logging out, email: %s" % email)
     mm.logout()
     try:
-        os.remove(DirInfo.OAuthFile)
+        os.remove(DirInfo.get_oauth_file_path(email))
     except OSError as e:
         logger.info("Error logging out: %s" % e)
     global logged_in
@@ -336,8 +341,13 @@ def main():
     # Initialize db if it doesn't exist
     data_init()
 
+    session_opts = {
+        'session.type': 'memory',
+        'session.auto': 'true'
+    }
+    app = SessionMiddleware(bottle.app(), session_opts)
 
-    run(host='0.0.0.0', port=config['PORT'], debug=True)
+    run(app=app, host='0.0.0.0', port=config['PORT'], debug=True)
 
 if __name__ == "__main__":
     main()
