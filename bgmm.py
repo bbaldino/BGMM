@@ -31,10 +31,12 @@ CONFIG_FILE="/boot/config/plugins/bgmm/bgmm_config.cfg"
 DB_FILE="/boot/config/plugins/bgmm/bgmm.db"
 config = {}
 logged_in = False
-STATUS_SCANNED = "SCANNED"
-STATUS_UPLOADED = "UPLOADED"
 SONGS_PER_PAGE = 10
 oauth_token = None
+
+class FileStatus:
+    Scanned = "SCANNED"
+    Uploaded = "UPLOADED"
 
 OAuthInfo = namedtuple('OAuthInfo', 'client_id client_secret scope redirect')
 oauth_info = OAuthInfo(
@@ -152,7 +154,7 @@ def scan():
 def upload_scanned():
     songs = get_all_songs()
     for song_path in songs.keys():
-        if songs[song_path]["status"] == STATUS_SCANNED:
+        if songs[song_path]["status"] == FileStatus.Scanned:
             logger.debug("Uploading song %s" % song_path)
             upload(song_path)
     redirect('/status')
@@ -209,24 +211,24 @@ def finished_writing_callback(new_file_path):
         logger.debug("Skipping non-mp3 file")
         return
     logger.info("Uploading new file: %s" % new_file_path)
-    update_path(new_file_path, STATUS_SCANNED)
+    update_path(new_file_path, FileStatus.Scanned)
     upload(new_file_path)
 
 def upload(file_path):
     uploaded, matched, not_uploaded = mm.upload(file_path, enable_matching=False) # async me!
     if uploaded:
         logger.info("Uploaded song %s with ID %s" % (file_path, uploaded[file_path]))
-        update_path(file_path, STATUS_UPLOADED, uploaded[file_path])
+        update_path(file_path, FileStatus.Uploaded, uploaded[file_path])
     if matched:
         logger.info("Matched song %s with ID %s" % (file_path, matched[file_path]))
-        update_path(file_path, STATUS_UPLOADED, uploaded[file_path])
+        update_path(file_path, FileStatus.Uploaded, uploaded[file_path])
     if not_uploaded:
         reason_string = not_uploaded[file_path]
         if "ALREADY_EXISTS" in reason_string:
             song_id = reason_string[reason_string.find("(") + 1 : reason_string.find(")")]
             logger.info("Song already exists with ID %s, updating database" % song_id)
             # The song ID is located within parentheses in the reason string
-            update_path(file_path, STATUS_UPLOADED, song_id)
+            update_path(file_path, FileStatus.Uploaded, song_id)
         else:
             logger.info("Unable to upload song %s because %s" % (file_path, reason_string))
 
@@ -241,7 +243,7 @@ def scan_existing_files(watched_paths):
                 logger.debug("looking at file %s, filename = %s, file extension = %s" % (file, filename, fileExtension))
                 if fileExtension == ".mp3":
                     logger.debug("Found file %s" % file);
-                    update_path(os.path.join(root, file), STATUS_SCANNED)
+                    update_path(os.path.join(root, file), FileStatus.Scanned)
     logger.debug("scanning finished");
 
 
