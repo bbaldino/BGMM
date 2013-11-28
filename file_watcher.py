@@ -2,7 +2,6 @@ import os
 import logging
 from pyinotify.pyinotify import WatchManager, Notifier, ThreadedNotifier, EventsCodes, ProcessEvent
 
-wm = WatchManager()
 logger = logging.getLogger("bgmm")
 
 mask = EventsCodes.FLAG_COLLECTIONS['OP_FLAGS']['IN_CREATE'] | \
@@ -21,45 +20,44 @@ class EventHandler(ProcessEvent):
     def process_IN_DELETE(self, event):
         logger.info("Deleted %s" % os.path.join(event.path, event.name))
 
-notifier = None
-watches = {}
+class FileWatcher:
+    def __init__(self, email, finished_writing_callback, paths=[]):
+        self.email = email
+        self.wm = WatchManager()
+        self.watches = {}
+        self.handler = EventHandler()
+        self.handler.add_finished_writing_callback(finished_writing_callback)
+        self.notifier = ThreadedNotifier(self.wm, self.handler)
+        self.notifier.start()
+        logger.info("Created FileWatcher for %s" % self.email)
+        for path in paths:
+            self.watch(path)
 
-def watch(file_path, finished_writing_callback):
-    logger.info("Will monitor %s for changes" % file_path)
-    if file_path in watches:
-        logger.info("Already monitoring")
-        return
-    handler = EventHandler()
-    handler.add_finished_writing_callback(finished_writing_callback)
-    global notifier
-    logger.debug("Creating threaded notifier")
-    notifier = ThreadedNotifier(wm, handler)
-    logger.debug("Starting threaded notifier")
-    notifier.start()
-    logger.debug("Adding watch to watch manager");
-    wdd = wm.add_watch(file_path, mask, rec=True, auto_add=True)
-    logger.debug("Added watch to watch manager");
-    watches[file_path] = wdd[file_path]
-    logger.debug("filewatch dict is now: %s" % watches)
+    def watch(self, path):
+        logger.info("Will monitor %s for changes for %s" % (path, self.email))
+        if path in self.watches:
+            logger.info("Already monitoring that path")
+            return
+        wdd = self.wm.add_watch(path, mask, rec=True, auto_add=True)
+        self.watches[path] = wdd[path]
+        logger.debug("File watch dict for %s is now %s" % (self.email, self.watches))
 
-def remove_watch(file_path):
-    watch_fd = watches.get(file_path)
-    logger.debug("Got watch_fd %s for path %s" % (watch_fd, file_path))
-    if watch_fd:
-        rr = wm.rm_watch(watch_fd, rec=True)
-        if rr.get(watch_fd):
-            logger.info("Successfully stopped watching path %s" % file_path)
+    def remove_watch(self, path):
+        watch_fd = self.watches.get(path)
+        if watch_fd:
+            rr = wm.rm_watch(watch_fd, rec=True)
+            if rr.get(watch_fd):
+                logger.info("Successfully stopped watching path %s for %s" % (path, self.email))
+            else:
+                logger.warning("Error trying to stop watching path %s for %s" % (path, self.email))
+            del self.watches[path]
         else:
-            logger.warning("Error trying to stop watching path %s" % file_path)
-        del watches[file_path]
-    else:
-        logger.warning("Tried to stop watching un-watched path %s" % file_path)
+            logger.warning("Tried to stop watching un-watched path %s for %s" % (path, self.email))
 
-def stop_watching():
-    logger.info("Stopping file watch")
-    global notifier
-    notifier.stop()
-    logger.info("Stopped file watch")
+    def stop_watching(self):
+        logger.info("Stopping file watch for %s" % self.email)
+        self.notifier.stop()
 
-def get_watched_paths():
-    return watches
+    def get_watched_paths(self):
+        return self.watches
+        
