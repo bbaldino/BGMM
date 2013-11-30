@@ -11,7 +11,7 @@
             </ul>
             <ul class="nav navbar-nav pull-right">
                 % if session_status["logged_in"]:
-                    <li id="status_label">Logged in</li>
+                    <li id="status_label">{{session_status["email"]}}</li>
                     <li><a href="/logout">(Logout)</a></li>
                 % else:
                     <li id="status_label">Not logged in</li>

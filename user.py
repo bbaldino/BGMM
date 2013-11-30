@@ -15,7 +15,6 @@ class FileStatus:
     Scanned = "SCANNED"
     Uploaded = "UPLOADED"
 
-
 class User:
     def __init__(self, email, app_data_dir):
         self.email = email

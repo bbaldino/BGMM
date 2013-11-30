@@ -122,7 +122,8 @@ def oauth_submit():
 @route('/main')
 @check_login
 def main():
-    return template('default', content="Welcome!", session_status={"logged_in": logged_in})
+    email = get_email_from_session()
+    return template('default', content="Welcome!", session_status={"logged_in": logged_in, "email": email})
 
 @route('/logout')
 def logout():
@@ -142,17 +143,17 @@ def logout():
 @route('/config')
 @check_login
 def config():
-    session = get_session()
-    user = users[session["email"]]
+    email = get_email_from_session()
+    user = users[email]
     watched_paths = user.get_watched_paths()
-    return template('config', session_status={"logged_in": logged_in}, watched_paths = watched_paths)
+    return template('config', session_status={"logged_in": logged_in, "email": email}, watched_paths = watched_paths)
 
 @route('/status')
 @check_login
 def status():
     page = int(request.query.page) if request.query.page else 1
-    session = get_session()
-    user = users[session["email"]]
+    email = get_email_from_session()
+    user = users[email]
     songs = user.get_all_songs()
     num_pages = int(len(songs.keys()) / SONGS_PER_PAGE) + 1
     start_song = ((page - 1) * SONGS_PER_PAGE)
@@ -162,14 +163,15 @@ def status():
     for song_path in songs.keys()[start_song : end_song]:
         page_songs.append(Song(song_path, songs[song_path]['status'], songs[song_path]['id']))
 
-    return template('status', session_status={"logged_in": logged_in}, songs=page_songs, num_pages=num_pages, curr_page=page)
+    return template('status', session_status={"logged_in": logged_in, "email": email}, songs=page_songs, num_pages=num_pages, curr_page=page)
 
 @route('/logs')
 def logs():
+    email = get_email_from_session()
     with open(LOG_LOCATION, "r") as f:
         log_lines_desc = f.readlines()
         log_lines_desc.reverse()
-        return template('logs', session_status={"logged_in": logged_in}, log_lines=log_lines_desc)
+        return template('logs', session_status={"logged_in": logged_in, "email": email}, log_lines=log_lines_desc)
 
 @route('/scan')
 @check_login
