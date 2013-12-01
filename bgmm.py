@@ -70,8 +70,7 @@ def get_email(oauth_token):
 def check_login(fn):
     def check_logged_in(**kwargs):
         if not logged_in:
-            oauth_uri = oauth2_flow.step1_get_authorize_url()
-            return template('login', session_status={"logged_in": logged_in}, oauth_uri=oauth_uri)
+            redirect('/login')
         else:
             return fn(**kwargs)
     return check_logged_in
@@ -83,12 +82,30 @@ def get_email_from_session():
     session = get_session()
     return session.get("email", None)
 
+def get_other_accounts():
+    curr_account = get_email_from_session()
+    return [user for user in users.keys() if user != curr_account]
+
+def get_session_data():
+    email = get_email_from_session()
+    other_users = get_other_accounts()
+    return {"logged_in": logged_in,
+            "email": email,
+            "other_users": other_users}
+
 # ----- Web -------
 
 @route('/')
 @check_login
 def root():
     redirect("/main")
+
+@route('/login')
+def login():
+    email = get_email_from_session()
+    other_users = get_other_accounts()
+    oauth_uri = oauth2_flow.step1_get_authorize_url()
+    return template('login', session_status=get_session_data(), oauth_uri=oauth_uri)
 
 @post('/submit_oauth_key')
 def oauth_submit():
@@ -123,7 +140,15 @@ def oauth_submit():
 @check_login
 def main():
     email = get_email_from_session()
-    return template('default', content="Welcome!", session_status={"logged_in": logged_in, "email": email})
+    other_users = get_other_accounts()
+    return template('default', content="Welcome!", session_status=get_session_data())
+
+@route('/switch_account/:new_account')
+def switch_account(new_account):
+    logger.debug("Switching to account %s" % new_account)
+    session = get_session()
+    session["email"] = new_account
+    redirect("/main")
 
 @route('/logout')
 def logout():
@@ -146,7 +171,7 @@ def config():
     email = get_email_from_session()
     user = users[email]
     watched_paths = user.get_watched_paths()
-    return template('config', session_status={"logged_in": logged_in, "email": email}, watched_paths = watched_paths)
+    return template('config', session_status=get_session_data(), watched_paths = watched_paths)
 
 @route('/status')
 @check_login
@@ -163,7 +188,7 @@ def status():
     for song_path in songs.keys()[start_song : end_song]:
         page_songs.append(Song(song_path, songs[song_path]['status'], songs[song_path]['id']))
 
-    return template('status', session_status={"logged_in": logged_in, "email": email}, songs=page_songs, num_pages=num_pages, curr_page=page)
+    return template('status', session_status=get_session_data(), songs=page_songs, num_pages=num_pages, curr_page=page)
 
 @route('/logs')
 def logs():
@@ -171,7 +196,7 @@ def logs():
     with open(LOG_LOCATION, "r") as f:
         log_lines_desc = f.readlines()
         log_lines_desc.reverse()
-        return template('logs', session_status={"logged_in": logged_in, "email": email}, log_lines=log_lines_desc)
+        return template('logs', session_status=get_session_data(), log_lines=log_lines_desc)
 
 @route('/scan')
 @check_login
@@ -213,6 +238,8 @@ def add_watch_path():
 def get_static(filename, ext):
     if ext == "css":
         return static_file(filename + "." + ext, root='/boot/config/plugins/bgmm/bgmm/public/stylesheets')
+    if ext == "js":
+        return static_file(filename + "." + ext, root="/boot/config/plugins/bgmm/bgmm/public/javascript")
 
 # ----- End Web -------
 

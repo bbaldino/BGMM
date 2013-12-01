@@ -45,7 +45,7 @@ class FileWatcher:
     def remove_watch(self, path):
         watch_fd = self.watches.get(path)
         if watch_fd:
-            rr = wm.rm_watch(watch_fd, rec=True)
+            rr = self.wm.rm_watch(watch_fd, rec=True)
             if rr.get(watch_fd):
                 logger.info("Successfully stopped watching path %s for %s" % (path, self.email))
             else:

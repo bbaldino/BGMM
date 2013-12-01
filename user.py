@@ -102,7 +102,7 @@ class User:
 
 
     def _data_init(self):
-        con = sql.connect(os.path.join(self.app_data_dir, DB_NAME))
+        con = sql.connect(os.path.join(self.app_data_dir, self.email, DB_NAME))
         with con:
             cur = con.cursor()
             cur.execute('''CREATE TABLE IF NOT EXISTS songs(
@@ -117,12 +117,12 @@ class User:
                  status)
                 )
 
-        con = sql.connect(os.path.join(self.app_data_dir, DB_NAME))
+        con = sql.connect(os.path.join(self.app_data_dir, self.email, DB_NAME))
         with con:
             cur = con.cursor()
             cur.execute('''REPLACE INTO songs VALUES(?, ?, ?)''', info)
 
-    def _finished_writing_callback(new_file_path):
+    def _finished_writing_callback(self, new_file_path):
         logger.debug("New file %s" % new_file_path)
         filename, file_extension = os.path.splitext(new_file_path)
         if file_extension != ".mp3":
@@ -152,7 +152,7 @@ class User:
 
     def get_all_songs(self):
         songs = {}
-        con = sql.connect(os.path.join(self.app_data_dir, DB_NAME))
+        con = sql.connect(os.path.join(self.app_data_dir, self.email, DB_NAME))
         with con:
             cur = con.cursor()
             for row in cur.execute('''SELECT * FROM songs'''):
