@@ -34,10 +34,11 @@ class DirInfo:
     BaseAppDataDir = "/boot/config/appdata/bgmm/"
     
     AppConfig = os.path.join(BaseAppDir, "bgmm_config.cfg")
+    OAuthFilename = "oauth.cred"
 
     @staticmethod
     def get_oauth_file_path(email):
-        return os.path.join(DirInfo.BaseAppDataDir, email, "oauth.cred")
+        return os.path.join(DirInfo.BaseAppDataDir, email, DirInfo.OAuthFilename)
 
     @staticmethod
     def get_user_data_file_path(email):
@@ -93,6 +94,48 @@ def get_session_data():
             "email": email,
             "other_users": other_users}
 
+def get_token_from_refresh(refresh_token):
+    params = {"refresh_token": refresh_token,
+              "client_id": oauth_info.client_id,
+              "client_secret": oauth_info.client_secret,
+              "grant_type": "refresh_token"
+              }
+    r = requests.post("https://accounts.google.com/o/oauth2/token", params)
+    if "access_token" in r.json():
+        return r.json()["access_token"]
+    return None
+
+def check_for_existing_tokens():
+    # Check for any previously logged-in users and try to use the refresh
+    #  tokens to log them in again automatically
+    # Only run at process startup
+    for root, dirs, files in os.walk(DirInfo.BaseAppDataDir):
+        logger.debug("Trying to log in user %s" % os.path.dirname(root))
+        if DirInfo.OAuthFilename in files:
+            logger.debug("Found credential")
+            storage = oauth2client.file.Storage(os.path.join(root, DirInfo.OAuthFilename))
+            credentials = storage.get()
+            new_access_token = get_token_from_refresh(credentials.refresh_token)
+            if new_access_token:
+                logger.info("Was able to use refresh_token")
+                credentials.access_token = new_access_token
+                storage.put(credentials)
+                email = get_email(credentials.access_token)
+                user = User(email, DirInfo.BaseAppDataDir)
+                users[email] = user
+                if not user.init(credentials):
+                    logger.info("Error logging in user %s" % email)
+                else:
+                    # This will get re-written over for each user, but for now
+                    #  we'll just have the last one we process be who's logged in
+                    #  by default
+                    global logged_in
+                    logged_in = True
+                    session = get_session()
+                    session["email"] = email
+            else:
+                logger.info("Unable to use refresh token")
+
 # ----- Web -------
 
 @route('/')
@@ -102,6 +145,9 @@ def root():
 
 @route('/login')
 def login():
+    check_for_existing_tokens()
+    if logged_in:
+        redirect("/main")
     email = get_email_from_session()
     other_users = get_other_accounts()
     oauth_uri = oauth2_flow.step1_get_authorize_url()
@@ -118,8 +164,6 @@ def oauth_submit():
     else:
         # Get the user's email and add it to the session
         email = get_email(credentials.access_token)
-        session = get_session()
-        session["email"] = email
         # Store the oauth credentials
         oauth_path = DirInfo.get_oauth_file_path(email)
         util.make_sure_path_exists(os.path.dirname(oauth_path))
@@ -134,6 +178,8 @@ def oauth_submit():
         else:
             global logged_in
             logged_in = True
+            session = get_session()
+            session["email"] = email
             redirect("/main")
 
 @route('/main')
