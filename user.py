@@ -1,5 +1,9 @@
-import os, logging, json
+import sys, os, logging, json
 import sqlite3 as sql
+# Root path
+base_path = os.path.dirname(os.path.abspath(__file__))
+# Insert local libs dir into path
+sys.path.insert(0, os.path.join(base_path, 'libs'))
 
 from gmusicapi import Musicmanager
 from file_watcher import FileWatcher
@@ -105,10 +109,7 @@ class User:
         con = sql.connect(os.path.join(self.app_data_dir, self.email, DB_NAME))
         with con:
             cur = con.cursor()
-            cur.execute('''CREATE TABLE IF NOT EXISTS songs(
-                            path TEXT PRIMARY KEY,
-                            id TEXT,
-                            status TEXT)''')
+            cur.execute('''CREATE TABLE IF NOT EXISTS songs(path TEXT PRIMARY KEY, id TEXT, status TEXT)''')
 
     def _update_path(self, path, status, id=None):
         logger.info("Updating path %s with id %s and status %s" % (path, id, status))
