@@ -120,6 +120,14 @@ class User:
         con = sql.connect(os.path.join(self.app_data_dir, self.email, DB_NAME))
         with con:
             cur = con.cursor()
+            # First check if the song is already in the data store and, if so, what its status is
+            cur.execute('''SELECT status FROM songs WHERE path=(?)''', (path,))
+            res = cur.fetchone()
+            if res:
+                res = res[0]
+                if res == FileStatus.Uploaded:
+                    # If it's already been uploaded, don't override that status with something else
+                    return
             cur.execute('''REPLACE INTO songs VALUES(?, ?, ?)''', info)
 
     def _finished_writing_callback(self, new_file_path):
