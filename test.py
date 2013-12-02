@@ -4,12 +4,14 @@ base_path = os.path.dirname(os.path.abspath(__file__))
 # Insert local libs dir into path
 sys.path.insert(0, os.path.join(base_path, 'libs'))
 
+import util
 import user
 import unittest
 from contextlib import contextmanager
 
 TEST_EMAIL = "test@test.com"
 TEST_APP_DATA_DIR = "/tmp/appdata/"
+TEST_WATCH_PATH = "/tmp/watch"
 
 
 class FakeSql:
@@ -55,6 +57,7 @@ class FakeFileWatcher:
     finished_writing_callback = None
     watched_paths = None
     stop_watching_count = 0
+    last_watched_path = None
     def __init__(self, email, finished_writing_callback, watched_paths):
         FakeFileWatcher.create_count += 1
         FakeFileWatcher.email = email
@@ -64,6 +67,9 @@ class FakeFileWatcher:
     def stop_watching(self):
         FakeFileWatcher.stop_watching_count += 1
 
+    def watch(self, path):
+        FakeFileWatcher.last_watched_path = path
+
 class TestUser(unittest.TestCase):
     def setUp(self):
         user.sql = FakeSql
@@ -72,8 +78,8 @@ class TestUser(unittest.TestCase):
 
         self.user = user.User(TEST_EMAIL, TEST_APP_DATA_DIR)
 
-    def testInit(self):
-        self.user.init(None)
+    def test_init(self):
+        self.assertTrue(self.user.init(None))
         # Check database initialization
         self.assertEqual(os.path.join(TEST_APP_DATA_DIR, TEST_EMAIL, user.DB_NAME), FakeSql.connect_path)
         self.assertEqual("CREATE TABLE IF NOT EXISTS songs(path TEXT PRIMARY KEY, id TEXT, status TEXT)", FakeSql.execute_statement)
@@ -87,21 +93,28 @@ class TestUser(unittest.TestCase):
         self.assertEqual(FakeFileWatcher.finished_writing_callback, self.user._finished_writing_callback)
         self.assertEqual(FakeFileWatcher.watched_paths, [])
 
-    def testInitWithPreviouslyWatchedPaths(self):
+    def test_init_with_previously_watched_paths(self):
         pass
 
-    def testLogout(self):
-        self.user.init(None)
-        self.user.logout()
+    def test_init_with_failed_mm_login(self):
+        pass
 
-        self.assertEqual(FakeMusicManager.logout_count, 1)
-        self.assertEqual(FakeFileWatcher.stop_watching_count, 1)
+    #def test_logout(self):
+    #    self.user.init(None)
+    #    self.user.logout()
+
+    #    self.assertEqual(FakeMusicManager.logout_count, 1)
+    #    self.assertEqual(FakeFileWatcher.stop_watching_count, 1)
 
     def test_get_watched_paths(self):
         pass
 
-    def test_add_watch_path(self):
-        pass
+    #def test_add_watch_path(self):
+    #    self.user.init(None)
+    #    self.user.add_watch_path(TEST_WATCH_PATH)
+    #    # Path should be added to config file and FileWatcher
+    #    self.assertEqual(TEST_WATCH_PATH, FakeFileWatcher.last_watched_path)
+    #    config = util.read_config(os.path.join(TEST_APP_DATA_DIR, TEST_EMAIL, user.CFG_FILE_NAME))
 
     def test_remove_watch_path(self):
         pass
@@ -121,4 +134,12 @@ class TestUser(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    try:
+        os.remove(os.path.join(TEST_APP_DATA_DIR, TEST_EMAIL, user.DB_NAME))
+    except:
+        pass
+    try:
+        os.remove(os.path.join(TEST_APP_DATA_DIR, TEST_EMAIL, user.CFG_FILE_NAME))
+    except:
+        pass
     unittest.main()

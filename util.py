@@ -9,6 +9,7 @@ def read_config(config_file):
     return {}
 
 def write_config(config, config_file):
+    make_sure_path_exists(os.path.dirname(config_file))
     with open(config_file, "w+") as f:
         json.dump(config, f)
 
