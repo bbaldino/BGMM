@@ -18,6 +18,7 @@ logger.setLevel(logging.DEBUG)
 class FileStatus:
     Scanned = "SCANNED"
     Uploaded = "UPLOADED"
+    Error = "ERROR"
 
 class User:
     def __init__(self, email, app_data_dir):
@@ -160,6 +161,7 @@ class User:
                 self._update_path(file_path, FileStatus.Uploaded, song_id)
             else:
                 logger.info("Unable to upload song %s because %s" % (file_path, reason_string))
+                self._update_path(file_path, FileStatus.Error, reason_string)
 
     def get_all_songs(self):
         songs = {}
