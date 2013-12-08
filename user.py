@@ -67,7 +67,8 @@ class User:
         if "watched_paths" not in config:
             config["watched_paths"] = [path]
         else:
-            config["watched_paths"].append(path)
+            if path not in config["watched_paths"]:
+                config["watched_paths"].append(path)
         self._write_config(config)
 
     def remove_watch_path(self, path):
@@ -76,7 +77,8 @@ class User:
         # Remove from the config
         config = self._read_config()
         if "watched_paths" in config:
-            config["watched_paths"].remove(path)
+            if path in config["watched_paths"]:
+                config["watched_paths"].remove(path)
         else:
             logger.info("%s trying to remove watch path %s that we weren't watching" % (self.email, path))
         self._write_config(config)
