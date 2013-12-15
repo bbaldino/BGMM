@@ -1,9 +1,23 @@
 % include header.tpl {"session_status": session_status}
 <div class="container">
     <div class="row">
-        <div>
-            <a href="/scan">Scan existing files</a>
-            <a href="/upload">Upload scanned files</a>
+        <div class="well">
+            <div class="row">
+                <div class="col-md-5">
+                    <a class="btn btn-primary" href="/scan">Scan for new files</a>
+                    <a class="btn btn-primary" href="/upload">Upload scanned files</a>
+                </div>
+                <div class="col-md-6">
+                    <label for="select" class="col-md-4 control-label">Change selected files' status to:</label>
+                    <div class="col-md-3">
+                        <select class="form-control" id="select">
+                            <option>1</option>
+                            <option>2</option>
+                            <option>3</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     <div class="row">
@@ -11,6 +25,7 @@
             <table class="table table-bordered table-striped table-hover">
                 <thead>
                     <tr>
+                        <th></th>
                         <th>Path</th>
                         <th>Status</th>
                         <th>Id</th>
@@ -19,6 +34,9 @@
                 <tbody>
                     % for song in songs:
                     <tr>
+                        <td>
+                            <input type="checkbox" id="{{song.path}}">
+                        </td>
                         <td>
                             {{song.path}}
                         </td>

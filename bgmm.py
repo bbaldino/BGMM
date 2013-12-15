@@ -1,5 +1,7 @@
 import os, sys, logging, json
 from collections import namedtuple
+import thread
+
 
 LOG_LOCATION = "/tmp/bgmm.log"
 logger = logging.getLogger("bgmm")
@@ -249,7 +251,7 @@ def logs():
 def scan():
     email = get_email_from_session()
     user = users[email]
-    user.scan_existing_files()
+    thread.start_new_thread(user.scan_existing_files, ())
     redirect('/status')
 
 @route('/upload')
@@ -257,7 +259,7 @@ def scan():
 def upload_scanned():
     email = get_email_from_session()
     user = users[email]
-    user.upload_scanned()
+    thread.start_new_thread(user.upload_scanned, ())
     redirect('/status')
 
 @post('/remove_watch_path')
