@@ -57,17 +57,30 @@
             <ul class="pagination">
                 % prev_page = curr_page - 1
                 % next_page = curr_page + 1
+                % if num_pages > 10:
+                %   start_page = max(1, curr_page - 5)
+                %   end_page = min(num_pages + 1, curr_page + 5)
+                % else:
+                %   start_page = 1
+                %   end_page = num_pages
+                % end
                 % if curr_page <= 1:
                     <li class="disabled"><span>&laquo;</span></li>
                 % else:
                     <li><a href="?page={{prev_page}}">&laquo;</a></li>
                 % end
-                % for page in range(1, num_pages + 1):
+                % if start_page > 1:
+                    <li><a href="?page=1">1</a></li>
+                % end
+                % for page in range(start_page, end_page):
                   % if page == curr_page:
-                    <li class="active"><a href="?page={{page}}">{{page}}</a></li>
+                    <li class="active"><span>{{page}}</span></li>
                   % else:
                     <li><a href="?page={{page}}">{{page}}</a></li>
                   % end
+                % end
+                % if end_page < num_pages + 1:
+                    <li><a href="?page={{num_pages}}">{{num_pages}}</a></li>
                 % end
                 % if curr_page >= (num_pages + 1):
                     <li class="disabled"><span>&raquo;</span></li>
