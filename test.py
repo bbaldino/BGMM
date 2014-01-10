@@ -190,6 +190,7 @@ class TestUser(unittest.TestCase):
         self.assertEqual([TEST_WATCH_PATH], FakeUtil.config["watched_paths"])
 
     def test_scan_existing_files(self):
+        pass
         #self.user.init(None)
         #FakeUtil.config["watched_paths"] = TEST_WATCH_PATH
         ## Create a dummy mp3
