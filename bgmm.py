@@ -1,12 +1,13 @@
 import os, sys, logging, json
 from collections import namedtuple
+from logging.handlers import RotatingFileHandler
 import thread
 
 
 LOG_LOCATION = "/tmp/bgmm.log"
 logger = logging.getLogger("bgmm")
 logger.setLevel(logging.DEBUG)
-fh = logging.FileHandler(LOG_LOCATION)
+fh = RotatingFileHandler(LOG_LOCATION, maxBytes=1048576, backupCount=5)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 fh.setFormatter(formatter)
 logger.addHandler(fh)
@@ -288,6 +289,8 @@ def get_static(filename, ext):
         return static_file(filename + "." + ext, root='/boot/config/plugins/bgmm/bgmm/public/stylesheets')
     if ext == "js":
         return static_file(filename + "." + ext, root="/boot/config/plugins/bgmm/bgmm/public/javascript")
+    if ext == "png":
+        return static_file(filename + "." + ext, root="/boot/config/plugins/bgmm/bgmm/public/images")
 
 # ----- End Web -------
 
