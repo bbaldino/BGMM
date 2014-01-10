@@ -86,6 +86,15 @@ class User:
             logger.info("%s trying to remove watch path %s that we weren't watching" % (self.email, path))
         self._write_config(config)
 
+    def set_default_action(self, default_action):
+        config = self._read_config()
+        config["default_action"] = default_action
+        self._write_config(config)
+
+    def get_default_action(self):
+        config = self._read_config()
+        return config.get("default_action", "")
+
     def scan_existing_files(self):
         watched_paths = self.get_watched_paths()
         logger.debug("%s Scanning existing files in these directories: %s" % (self.email, watched_paths))
@@ -144,9 +153,10 @@ class User:
         if file_extension != ".mp3":
             logger.debug("Skipping non-mp3 file")
             return
-        logger.info("Uploading new file: %s" % new_file_path)
         self._update_path(new_file_path, FileStatus.Scanned)
-        self.upload(new_file_path)
+        if self.get_default_action() == "auto_upload":
+            logger.info("Uploading new file: %s" % new_file_path)
+            self.upload(new_file_path)
 
     def upload(self, file_path):
         uploaded, matched, not_uploaded = self.mm.upload(file_path, enable_matching=False) # async me!

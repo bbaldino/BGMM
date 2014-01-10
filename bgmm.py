@@ -220,7 +220,8 @@ def config():
     email = get_email_from_session()
     user = users[email]
     watched_paths = user.get_watched_paths()
-    return template('config', session_status=get_session_data(), watched_paths = watched_paths)
+    default_action = user.get_default_action()
+    return template('config', session_status=get_session_data(), watched_paths = watched_paths, default_action=default_action)
 
 @route('/status')
 @check_login
@@ -283,6 +284,17 @@ def add_watch_path():
     curr_page = request.forms.get('curr_page')
     users[email].add_watch_path(path)
     redirect(curr_page)
+
+@post('/change_options')
+@check_login
+def change_options():
+    email = get_email_from_session()
+    default_action = request.forms.get('default_action')
+    logger.info("changing default action to: " + default_action)
+    users[email].set_default_action(default_action)
+    curr_page = request.forms.get('curr_page')
+    redirect(curr_page)
+
 
 @route('/static/:filename.:ext')
 def get_static(filename, ext):
