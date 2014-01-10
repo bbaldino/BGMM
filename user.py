@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.join(base_path, 'libs'))
 from gmusicapi import Musicmanager
 from file_watcher import FileWatcher
 import util
+import threading
 
 CFG_FILE_NAME = "user_config.cfg"
 DB_NAME = "bgmm.db"
@@ -24,6 +25,7 @@ class User:
     def __init__(self, email, app_data_dir):
         self.email = email
         self.app_data_dir = app_data_dir
+        self.db_lock = threading.Lock()
 
     def init(self, oauth_credentials):
         # Initialize the database
@@ -109,10 +111,11 @@ class User:
 
 
     def _data_init(self):
-        con = sql.connect(os.path.join(self.app_data_dir, self.email, DB_NAME))
-        with con:
-            cur = con.cursor()
-            cur.execute('''CREATE TABLE IF NOT EXISTS songs(path TEXT PRIMARY KEY, id TEXT, status TEXT)''')
+        with self.db_lock:
+            con = sql.connect(os.path.join(self.app_data_dir, self.email, DB_NAME))
+            with con:
+                cur = con.cursor()
+                cur.execute('''CREATE TABLE IF NOT EXISTS songs(path TEXT PRIMARY KEY, id TEXT, status TEXT)''')
 
     def _update_path(self, path, status, id=None):
         logger.info("Updating path %s with id %s and status %s" % (path, id, status))
@@ -121,18 +124,19 @@ class User:
                  status)
                 )
 
-        con = sql.connect(os.path.join(self.app_data_dir, self.email, DB_NAME))
-        with con:
-            cur = con.cursor()
-            # First check if the song is already in the data store and, if so, what its status is
-            cur.execute('''SELECT status FROM songs WHERE path=(?)''', (path,))
-            res = cur.fetchone()
-            if res:
-                res = res[0]
-                if res == FileStatus.Uploaded:
-                    # If it's already been uploaded, don't override that status with something else
-                    return
-            cur.execute('''REPLACE INTO songs VALUES(?, ?, ?)''', info)
+        with self.db_lock:
+            con = sql.connect(os.path.join(self.app_data_dir, self.email, DB_NAME))
+            with con:
+                cur = con.cursor()
+                # First check if the song is already in the data store and, if so, what its status is
+                cur.execute('''SELECT status FROM songs WHERE path=(?)''', (path,))
+                res = cur.fetchone()
+                if res:
+                    res = res[0]
+                    if res == FileStatus.Uploaded:
+                        # If it's already been uploaded, don't override that status with something else
+                        return
+                cur.execute('''REPLACE INTO songs VALUES(?, ?, ?)''', info)
 
     def _finished_writing_callback(self, new_file_path):
         logger.debug("New file %s" % new_file_path)
@@ -165,14 +169,15 @@ class User:
 
     def get_all_songs(self):
         songs = {}
-        con = sql.connect(os.path.join(self.app_data_dir, self.email, DB_NAME))
-        with con:
-            cur = con.cursor()
-            for row in cur.execute('''SELECT * FROM songs'''):
-                song_path = row[0]
-                song_id = row[1]
-                song_status = row[2]
-                songs[song_path] = {'id': song_id,
-                                    'status': song_status}
+        with self.db_lock:
+            con = sql.connect(os.path.join(self.app_data_dir, self.email, DB_NAME))
+            with con:
+                cur = con.cursor()
+                for row in cur.execute('''SELECT * FROM songs'''):
+                    song_path = row[0]
+                    song_id = row[1]
+                    song_status = row[2]
+                    songs[song_path] = {'id': song_id,
+                                        'status': song_status}
 
         return songs
