@@ -233,8 +233,9 @@ def status():
     start_song = ((page - 1) * SONGS_PER_PAGE)
     end_song = ((page - 1) * SONGS_PER_PAGE) + SONGS_PER_PAGE
     logger.debug("displaying results for page %s, showing songs %s to %s" % (page, (page * SONGS_PER_PAGE), (page * SONGS_PER_PAGE) + SONGS_PER_PAGE))
+    all_songs = sorted(songs.keys())
     page_songs = []
-    for song_path in songs.keys()[start_song : end_song]:
+    for song_path in all_songs[start_song : end_song]:
         page_songs.append(Song(song_path, songs[song_path]['status'], songs[song_path]['id']))
 
     return template('status', session_status=get_session_data(), songs=page_songs, num_pages=num_pages, curr_page=page)
