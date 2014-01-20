@@ -93,7 +93,7 @@ class User:
 
     def get_default_action(self):
         config = self._read_config()
-        return config.get("default_action", "")
+        return config.get("default_action", "scan_only")
 
     def scan_existing_files(self):
         watched_paths = self.get_watched_paths()

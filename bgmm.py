@@ -148,13 +148,27 @@ def root():
 
 @route('/login')
 def login():
-    check_for_existing_tokens()
+    session = get_session()
+    # If we haven't checked yet (i.e. when first starting up), check for any users that we can log in
+    #  and log them in automtically.  We'll pick one at random to be the starting 'active' user
+    if not "tokens_checked" in session:
+        logger.info("Checking for existing tokens")
+        check_for_existing_tokens()
+        session["tokens_checked"] = True
+    # Check if we've got a user logged in already at this point.  If so, redirect to the main page
     if logged_in:
+        logger.info("User %s already logged in" % get_email_from_session())
         redirect("/main")
-    email = get_email_from_session()
-    other_users = get_other_accounts()
+    # If no one is logged in, present the change to log in
+    logger.info("No users logged in, showing oauth screen")
     oauth_uri = oauth2_flow.step1_get_authorize_url()
     return template('login', session_status=get_session_data(), oauth_uri=oauth_uri)
+
+@route('/add_account')
+def add_account():
+    global logged_in
+    logged_in = False
+    redirect('/login')
 
 @post('/submit_oauth_key')
 def oauth_submit():
@@ -189,7 +203,6 @@ def oauth_submit():
 @check_login
 def main():
     email = get_email_from_session()
-    other_users = get_other_accounts()
     return template('default', content="Welcome!", session_status=get_session_data())
 
 @route('/switch_account/:new_account')
@@ -212,6 +225,9 @@ def logout():
         logger.info("Error logging out: %s" % e)
     global logged_in
     logged_in = False
+    # Prompt a re-scan for any other logged in users
+    session = get_session()
+    session.pop("tokens_checked", None)
     redirect("/")
 
 @route('/config')

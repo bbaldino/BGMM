@@ -17,7 +17,7 @@
                         % for other_user in session_status["other_users"]:
                             <li><a href="/switch_account/{{other_user}}">{{other_user}}</a>
                         % end
-                            <li><a href="/login">Add account</a>
+                            <li><a href="/add_account">Add account</a>
                         </ul>
                     </li>
                     <li><a href="/logout">(Logout)</a></li>
