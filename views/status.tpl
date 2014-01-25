@@ -6,6 +6,7 @@
                 <div class="col-md-5">
                     <a class="btn btn-primary" href="/scan">Scan for new files</a>
                     <a class="btn btn-primary" href="/upload">Upload scanned files</a>
+                    <a class="btn btn-primary" href="/sync">Sync with library</a>
                 </div>
                 <div class="col-md-6">
                     <label for="select" class="col-md-4 control-label">Change selected files' status to:</label>

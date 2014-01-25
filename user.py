@@ -1,5 +1,7 @@
 import sys, os, logging, json
 import sqlite3 as sql
+import util
+import threading
 # Root path
 base_path = os.path.dirname(os.path.abspath(__file__))
 # Insert local libs dir into path
@@ -7,8 +9,7 @@ sys.path.insert(0, os.path.join(base_path, 'libs'))
 
 from gmusicapi import Musicmanager
 from file_watcher import FileWatcher
-import util
-import threading
+import eyed3
 
 CFG_FILE_NAME = "user_config.cfg"
 DB_NAME = "bgmm.db"
@@ -126,7 +127,7 @@ class User:
                 cur = con.cursor()
                 cur.execute('''CREATE TABLE IF NOT EXISTS songs(path TEXT PRIMARY KEY, id TEXT, status TEXT)''')
 
-    def _update_path(self, path, status, id=None):
+    def _update_path(self, path, status, id=None, override=False):
         logger.info("Updating path %s with id %s and status %s" % (path, id, status))
         info = ((path,
                  "" if not id else id,
@@ -137,14 +138,15 @@ class User:
             con = sql.connect(os.path.join(self.app_data_dir, self.email, DB_NAME))
             with con:
                 cur = con.cursor()
-                # First check if the song is already in the data store and, if so, what its status is
-                cur.execute('''SELECT status FROM songs WHERE path=(?)''', (path,))
-                res = cur.fetchone()
-                if res:
-                    res = res[0]
-                    if res == FileStatus.Uploaded:
-                        # If it's already been uploaded, don't override that status with something else
-                        return
+                if not override:
+                    # Check if the song is already in the data store and, if so, what its status is
+                    cur.execute('''SELECT status FROM songs WHERE path=(?)''', (path,))
+                    res = cur.fetchone()
+                    if res:
+                        res = res[0]
+                        if res == FileStatus.Uploaded:
+                            # If it's already been uploaded, don't override that status with something else
+                            return
                 cur.execute('''REPLACE INTO songs VALUES(?, ?, ?)''', info)
 
     def _finished_writing_callback(self, new_file_path):
@@ -157,6 +159,65 @@ class User:
         if self.get_default_action() == "auto_upload":
             logger.info("Uploading new file: %s" % new_file_path)
             self.upload(new_file_path)
+
+    @staticmethod
+    def _find_gmusic_song(scanned_song_tags, gmusic_songs):
+        artist = scanned_song_tags.artist.lower()
+        album = scanned_song_tags.album.lower()
+        title = scanned_song_tags.title.lower()
+        logger.debug("Found scanned song %s - %s - %s" % (artist, album, title))
+        # Search for an uploaded song that matches
+        for gmusic_song in gmusic_songs:
+            up_artist = gmusic_song['artist'].lower()
+            up_album = gmusic_song['album'].lower()
+            up_title = gmusic_song['title'].lower()
+            logger.debug("Looking at song %s - %s - %s" % (up_artist, up_album, up_title))
+            if artist == up_artist and album == up_album and title == up_title:
+                logger.debug("Found match!")
+                return gmusic_song
+        return None
+
+    def sync_library(self):
+        logger.debug("Syncing")
+        uploaded_songs = self.mm.get_all_songs()
+        scanned_songs = self.get_all_songs()
+        logger.debug("found %d scanned songs" % len(scanned_songs))
+        # Go through all songs marked 'scanned' and search for a matching that's already been uploaded.
+        #  If we find one, grab the id and mark the song as uploaded
+        for song_path in scanned_songs.keys():
+            # Since we only have the path, scan its tags to get the meta data
+            audioFile = eyed3.load(song_path)
+            if audioFile and audioFile.tag:
+                local_song = scanned_songs[song_path]
+                gmusic_song = User._find_gmusic_song(audioFile.tag, uploaded_songs)
+                # Now make sure our static is in sync, possibilities:
+                # 1) We show it as uploaded but google doesn't -> mark it as 'scanned', remove our id
+                # 2) Google shows it as uploaded but we don't -> mark it as 'uploaded', add the id
+                # 3) We both show it as uploaded and the ids match -> do nothing
+                # 4) Neither of us think it was uploaded -> do nothing
+                # 5) Google has it but we don't at all -> TODO!! (option for download?) we'll need to detect this another way (currently searching only by scanned songs)
+                if gmusic_song:
+                    # Google shows this song
+                    if local_song['status'] == FileStatus.Scanned:
+                        # Google shows it as uploaded but we don't.  Mark it as uploaded and update the id
+                        logger.debug("'%s - %s - %s' was already uploaded, updating its id to %s" % (gmusic_song['artist'], gmusic_song['album'], gmusic_song['title'], gmusic_song['id']))
+                        self._update_path(song_path, FileStatus.Uploaded, gmusic_song['id'], override=True)
+                    elif local_song['status'] == FileStatus.Uploaded:
+                        # We both show it as uploaded, make sure ids match
+                        if local_song['id'] != gmusic_song['id']:
+                            logger.debug("Ids differ!  Updating to use google's id")
+                            self._update_path(song_path, FileStatus.Uploaded, gmusic_song['id'], override=True)
+                        else:
+                            logger.debug("Ids match! No update needed")
+                else:
+                    # No matching song on google found
+                    if local_song['status'] == FileStatus.Uploaded:
+                        logger.debug("We show the song as uploaded but google doesn't, changing status to scanned and clearing id")
+                        self._update_path(song_path, FileStatus.Scanned, override=True)
+                    else:
+                        logger.debug("Neither side thinks it's uploaded, no update needed")
+            else:
+                logger.debug("Error loading metadata for song %s" % song_path)
 
     def upload(self, file_path):
         uploaded, matched, not_uploaded = self.mm.upload(file_path, enable_matching=False) # async me!

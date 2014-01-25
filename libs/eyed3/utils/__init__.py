@@ -22,7 +22,7 @@ import os
 import re
 import math
 import logging
-import argparse
+#import argparse
 import warnings
 from ..compat import unicode, StringIO, PY2
 
@@ -349,65 +349,65 @@ def chunkCopy(src_fp, dest_fp, chunk_sz=(1024 * 512)):
         del data
 
 
-class ArgumentParser(argparse.ArgumentParser):
-    '''Subclass of argparse.ArgumentParser that adds version and log level
-    options.'''
+#class ArgumentParser(argparse.ArgumentParser):
+#    '''Subclass of argparse.ArgumentParser that adds version and log level
+#    options.'''
+#
+#    def __init__(self, *args, **kwargs):
+#        from eyed3.info import VERSION_MSG
+#        from eyed3.utils.log import LEVELS
+#        from eyed3.utils.log import MAIN_LOGGER
+#
+#        def pop_kwarg(name, default):
+#            if name in kwargs:
+#                value = kwargs.pop(name) or default
+#            else:
+#                value = default
+#            return value
+#        main_logger = pop_kwarg("main_logger", MAIN_LOGGER)
+#        version = pop_kwarg("version", VERSION_MSG)
+#
+#        self.log_levels = [logging.getLevelName(l).lower() for l in LEVELS]
+#
+#        formatter = argparse.RawDescriptionHelpFormatter
+#        super(ArgumentParser, self).__init__(*args, formatter_class=formatter,
+#                                             **kwargs)
+#
+#        self.add_argument("--version", action="version", version=version,
+#                          help="Display version information and exit")
+#
+#        self.debug_arg_group = self.add_argument_group("Debugging")
+#        self.debug_arg_group.add_argument(
+#                "-l", "--log-level", metavar="LEVEL[:LOGGER]",
+#                action=LoggingAction, main_logger=main_logger,
+#                help="Set a log level. This option may be specified multiple "
+#                     "times. If a logger name is specified than the level "
+#                     "applies only to that logger, otherwise the level is set "
+#                     "on the top-level logger. Acceptable levels are %s. " %
+#                     (", ".join("'%s'" % l for l in self.log_levels)))
 
-    def __init__(self, *args, **kwargs):
-        from eyed3.info import VERSION_MSG
-        from eyed3.utils.log import LEVELS
-        from eyed3.utils.log import MAIN_LOGGER
 
-        def pop_kwarg(name, default):
-            if name in kwargs:
-                value = kwargs.pop(name) or default
-            else:
-                value = default
-            return value
-        main_logger = pop_kwarg("main_logger", MAIN_LOGGER)
-        version = pop_kwarg("version", VERSION_MSG)
-
-        self.log_levels = [logging.getLevelName(l).lower() for l in LEVELS]
-
-        formatter = argparse.RawDescriptionHelpFormatter
-        super(ArgumentParser, self).__init__(*args, formatter_class=formatter,
-                                             **kwargs)
-
-        self.add_argument("--version", action="version", version=version,
-                          help="Display version information and exit")
-
-        self.debug_arg_group = self.add_argument_group("Debugging")
-        self.debug_arg_group.add_argument(
-                "-l", "--log-level", metavar="LEVEL[:LOGGER]",
-                action=LoggingAction, main_logger=main_logger,
-                help="Set a log level. This option may be specified multiple "
-                     "times. If a logger name is specified than the level "
-                     "applies only to that logger, otherwise the level is set "
-                     "on the top-level logger. Acceptable levels are %s. " %
-                     (", ".join("'%s'" % l for l in self.log_levels)))
-
-
-class LoggingAction(argparse._AppendAction):
-    def __init__(self, *args, **kwargs):
-        self.main_logger = kwargs.pop("main_logger")
-        super(LoggingAction, self).__init__(*args, **kwargs)
-
-    def __call__(self, parser, namespace, values, option_string=None):
-
-        values = values.split(':')
-        level, logger = values if len(values) > 1 else (values[0],
-                                                        self.main_logger)
-
-        logger = logging.getLogger(logger)
-        try:
-            logger.setLevel(logging._levelNames[level.upper()])
-        except KeyError:
-            msg = "invalid level choice: %s (choose from %s)" % \
-                   (level, parser.log_levels)
-            raise argparse.ArgumentError(self, msg)
-
-        super(LoggingAction, self).__call__(parser, namespace, values,
-                                            option_string)
+#class LoggingAction(argparse._AppendAction):
+#    def __init__(self, *args, **kwargs):
+#        self.main_logger = kwargs.pop("main_logger")
+#        super(LoggingAction, self).__init__(*args, **kwargs)
+#
+#    def __call__(self, parser, namespace, values, option_string=None):
+#
+#        values = values.split(':')
+#        level, logger = values if len(values) > 1 else (values[0],
+#                                                        self.main_logger)
+#
+#        logger = logging.getLogger(logger)
+#        try:
+#            logger.setLevel(logging._levelNames[level.upper()])
+#        except KeyError:
+#            msg = "invalid level choice: %s (choose from %s)" % \
+#                   (level, parser.log_levels)
+#            raise argparse.ArgumentError(self, msg)
+#
+#        super(LoggingAction, self).__call__(parser, namespace, values,
+#                                            option_string)
 
 
 def datePicker(thing, prefer_recording_date=False):

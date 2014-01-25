@@ -273,6 +273,16 @@ def scan():
     thread.start_new_thread(user.scan_existing_files, ())
     redirect('/status')
 
+@route('/sync')
+@check_login
+def sync():
+    email = get_email_from_session()
+    user = users[email]
+    user.sync_library()
+    #thread.start_new_thread(user.scan_existing_files, ())
+    redirect('/status')
+
+
 @route('/upload')
 @check_login
 def upload_scanned():
