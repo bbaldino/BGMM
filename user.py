@@ -162,18 +162,22 @@ class User:
 
     @staticmethod
     def _find_gmusic_song(scanned_song_tags, gmusic_songs):
-        artist = scanned_song_tags.artist.lower()
-        album = scanned_song_tags.album.lower()
-        title = scanned_song_tags.title.lower()
-        logger.debug("Found scanned song %s - %s - %s" % (artist, album, title))
+        try:
+            artist = scanned_song_tags.artist.lower()
+            album = scanned_song_tags.album.lower()
+            title = scanned_song_tags.title.lower()
+            #logger.debug("Found scanned song %s - %s - %s" % (artist, album, title))
+        except:
+            logger.debug("Error grabbing song meta data")
+            return
         # Search for an uploaded song that matches
         for gmusic_song in gmusic_songs:
             up_artist = gmusic_song['artist'].lower()
             up_album = gmusic_song['album'].lower()
             up_title = gmusic_song['title'].lower()
-            logger.debug("Looking at song %s - %s - %s" % (up_artist, up_album, up_title))
+            #logger.debug("Looking at song %s - %s - %s" % (up_artist, up_album, up_title))
             if artist == up_artist and album == up_album and title == up_title:
-                logger.debug("Found match!")
+                #logger.debug("Found match!")
                 return gmusic_song
         return None
 
@@ -200,22 +204,24 @@ class User:
                     # Google shows this song
                     if local_song['status'] == FileStatus.Scanned:
                         # Google shows it as uploaded but we don't.  Mark it as uploaded and update the id
-                        logger.debug("'%s - %s - %s' was already uploaded, updating its id to %s" % (gmusic_song['artist'], gmusic_song['album'], gmusic_song['title'], gmusic_song['id']))
+                        #logger.debug("'%s - %s - %s' was already uploaded, updating its id to %s" % (gmusic_song['artist'], gmusic_song['album'], gmusic_song['title'], gmusic_song['id']))
                         self._update_path(song_path, FileStatus.Uploaded, gmusic_song['id'], override=True)
                     elif local_song['status'] == FileStatus.Uploaded:
                         # We both show it as uploaded, make sure ids match
                         if local_song['id'] != gmusic_song['id']:
-                            logger.debug("Ids differ!  Updating to use google's id")
+                            #logger.debug("Ids differ!  Updating to use google's id")
                             self._update_path(song_path, FileStatus.Uploaded, gmusic_song['id'], override=True)
                         else:
-                            logger.debug("Ids match! No update needed")
+                            pass
+                            #logger.debug("Ids match! No update needed")
                 else:
                     # No matching song on google found
                     if local_song['status'] == FileStatus.Uploaded:
-                        logger.debug("We show the song as uploaded but google doesn't, changing status to scanned and clearing id")
+                        #logger.debug("We show the song as uploaded but google doesn't, changing status to scanned and clearing id")
                         self._update_path(song_path, FileStatus.Scanned, override=True)
                     else:
-                        logger.debug("Neither side thinks it's uploaded, no update needed")
+                        pass
+                        #logger.debug("Neither side thinks it's uploaded, no update needed")
             else:
                 logger.debug("Error loading metadata for song %s" % song_path)
 
