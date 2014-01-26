@@ -1,4 +1,4 @@
-gmusic_uploader
+BGMM
 ===============
 
 google music uploader based on inotify
