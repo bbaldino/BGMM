@@ -8,7 +8,7 @@
                     <a class="btn btn-primary" href="/upload">Upload scanned files</a>
                     <a class="btn btn-primary" href="/sync">Sync with library</a>
                 </div>
-                <div class="col-md-6">
+                <!--div class="col-md-6">
                     <label for="select" class="col-md-4 control-label">Change selected files' status to:</label>
                     <div class="col-md-3">
                         <select class="form-control" id="select">
@@ -17,7 +17,7 @@
                             <option>3</option>
                         </select>
                     </div>
-                </div>
+                </div-->
             </div>
         </div>
     </div>
@@ -35,9 +35,9 @@
                 <tbody>
                     % for song in songs:
                     <tr>
-                        <td>
+                        <!--td>
                             <input type="checkbox" id="{{song.path}}">
-                        </td>
+                        </td-->
                         <td>
                             {{song.path}}
                         </td>
