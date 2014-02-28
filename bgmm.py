@@ -36,7 +36,7 @@ class DirInfo:
     BaseAppDir = "/boot/config/plugins/bgmm/"
     BaseAppDataDir = "/boot/config/appdata/bgmm/"
     
-    AppConfig = os.path.join(BaseAppDir, "bgmm_config.cfg")
+    AppConfig = os.path.join(BaseAppDataDir, "bgmm_config.cfg")
     OAuthFilename = "oauth.cred"
 
     @staticmethod
