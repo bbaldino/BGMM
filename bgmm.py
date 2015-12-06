@@ -33,10 +33,10 @@ logged_in = False
 SONGS_PER_PAGE = 10
 
 class DirInfo:
-    BaseAppDir = "/boot/config/plugins/bgmm/"
-    BaseAppDataDir = "/boot/config/appdata/bgmm/"
+    BaseAppDir = "/bgmm/BGMM"
+    BaseAppDataDir = "/bgmm/appdata"
     
-    AppConfig = os.path.join(BaseAppDataDir, "bgmm_config.cfg")
+    AppConfig = os.path.join(BaseAppDataDir, "bgmm.conf")
     OAuthFilename = "oauth.cred"
 
     @staticmethod
@@ -325,11 +325,11 @@ def change_options():
 @route('/static/:filename.:ext')
 def get_static(filename, ext):
     if ext == "css":
-        return static_file(filename + "." + ext, root='/boot/config/plugins/bgmm/bgmm/public/stylesheets')
+        return static_file(filename + "." + ext, root=DirInfo.BaseAppDir + "/public/stylesheets")
     if ext == "js":
-        return static_file(filename + "." + ext, root="/boot/config/plugins/bgmm/bgmm/public/javascript")
+        return static_file(filename + "." + ext, root=DirInfo.BaseAppDir + "/public/javascript")
     if ext == "png":
-        return static_file(filename + "." + ext, root="/boot/config/plugins/bgmm/bgmm/public/images")
+        return static_file(filename + "." + ext, root=DirInfo.BaseAppDir + "/public/images")
 
 # ----- End Web -------
 
